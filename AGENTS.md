@@ -1,88 +1,88 @@
-# AGENTS.md — Pedoman Ketat & Prinsip Kerja AI Agent (Rust)
+# AGENTS.md — Strict Guidelines & Working Principles for AI Agents (Rust)
 
-Dokumen ini adalah **kontrak kerja mutlak** untuk semua AI Coding Agent yang bekerja di repositori ini. Tujuan utama Anda adalah menulis kode Rust yang aman (*safe*), idiomatik, terukur, dan benar secara logika—**bukan sekadar membuat kode berhasil dikompilasi atau membuat indikator test berwarna hijau dengan jalan pintas.**
-
----
-
-## 1. Integritas Pengujian (Zero-Tolerance untuk Manipulasi Test)
-
-Test adalah spesifikasi kebenaran sistem. Jika sebuah test gagal (*FAIL*), itu berarti **implementasi kode yang salah**, bukan test-nya.
-
-### DILARANG KERAS:
-- **Mengubah Assertion:** Jangan pernah mengubah nilai ekspektasi pada `assert!`, `assert_eq!`, `assert_ne!`, atau `matches!` hanya agar sesuai dengan output kode yang sedang *buggy*.
-- **Menghapus atau Menonaktifkan Test:** Jangan pernah menghapus fungsi `#[test]`, mengomentari baris kode test, atau menambahkan atribut `#[ignore]` / `#[should_panic]` untuk menyembunyikan kegagalan.
-- **Hardcoding / Stubbing Palsu:** Jangan menulis logika `if input == test_case { return expected_output }` di dalam kode produksi hanya untuk mengelabui test runner.
-- **Melemahkan Validasi di Test:** Jangan mengganti pengecekan spesifik (misal memeriksa varian error tertentu) menjadi pengecekan longgar (misal sekadar `assert!(result.is_err())`).
-
-### YANG HARUS DILAKUKAN:
-- Telusuri akar masalah (*root cause*) pada logika bisnis atau alur data di kode produksi.
-- Anda **hanya boleh** mengubah test yang sudah ada jika pengguna secara eksplisit meminta perubahan spesifikasi bisnis, dan Anda wajib menjelaskan alasan perubahan test tersebut kepada pengguna.
+This document is the **absolute working contract** for every AI Coding Agent working in this repository. Your primary goal is to write Rust code that is safe, idiomatic, measurable, and logically correct—**not merely code that compiles or makes the test indicators turn green through shortcuts.**
 
 ---
 
-## 2. Disiplin Ownership, Borrowing, dan Lifetimes
+## 1. Test Integrity (Zero Tolerance for Test Manipulation)
 
-Borrow checker di Rust ada untuk menjamin keamanan memori dan konkurensi. Jangan melawannya dengan cara merusak arsitektur kode.
+Tests are the specification of the system's correctness. If a test fails (*FAIL*), it means the **implementation is wrong**, not the test.
 
-### DILARANG KERAS:
-- **Spamming `.clone()`:** Jangan menambahkan `.clone()` atau `.to_owned()` secara membabi buta hanya untuk membungkam error *borrow checker* (`cannot move out of...` atau `borrowed value does not live long enough`) tanpa memahami siapa yang seharusnya menjadi pemilik (*owner*) data tersebut.
-- **Penyalahgunaan Smart Pointer:** Jangan langsung membungkus tipe data dengan `Rc<RefCell<T>>` atau `Arc<Mutex<T>>` hanya karena kesulitan mengatur struktur *ownership* atau *mutable reference*, kecuali memang dibutuhkan untuk *shared state* lintas *thread* atau struktur graf yang sah.
-- **Memalsukan `'static` Lifetime:** Jangan memaksakan batas `T: 'static` atau menggunakan `Box::leak` hanya karena malas mendefinisikan *lifetime annotations* (`'a`) yang benar.
+### STRICTLY FORBIDDEN:
+- **Changing Assertions:** Never change the expected values in `assert!`, `assert_eq!`, `assert_ne!`, or `matches!` just to match the output of code that is currently *buggy*.
+- **Deleting or Disabling Tests:** Never delete a `#[test]` function, comment out test code, or add the `#[ignore]` / `#[should_panic]` attributes to hide failures.
+- **Hardcoding / Fake Stubbing:** Never write logic like `if input == test_case { return expected_output }` in production code just to trick the test runner.
+- **Weakening Validation in Tests:** Never replace a specific check (e.g. verifying a particular error variant) with a loose one (e.g. merely `assert!(result.is_err())`).
 
-### YANG HARUS DILAKUKAN:
-- Desain alur data dengan jelas: tentukan fungsi mana yang membutuhkan kepemilikan penuh (`T`), mana yang hanya perlu membaca (`&T`), dan mana yang perlu memodifikasi (`&mut T`).
-- Gunakan *slices* (`&[T]`, `&str`) daripada referensi ke koleksi penuh (`&Vec<T>`, `&String`) pada parameter fungsi.
-- Jika terbentur masalah *borrow checker* yang kompleks, restrukturisasi cakupan (*scope*) variabel atau pecah struct menjadi bagian-bagian yang lebih modular.
-
----
-
-## 3. Keamanan Memori & Larangan `unsafe`
-
-Keunggulan utama Rust adalah jaminan *memory safety* pada saat kompilasi.
-
-### DILARANG KERAS:
-- **Menggunakan Blok `unsafe`:** Anda dilarang keras menulis blok `unsafe { ... }`, `unsafe fn`, atau `unsafe impl` untuk melewati aturan kompilator.
-- **Transmutasi Tipe:** Jangan pernah menggunakan `std::mem::transmute`, *raw pointers* (`*const T`, `*mut T`), atau `MaybeUninit` sebagai jalan pintas mengatasi masalah tipe data atau *lifetime*.
-
-### PENGECUALIAN:
-- Penggunaan `unsafe` hanya diizinkan jika pengguna meminta secara spesifik (misalnya untuk integrasi FFI dengan C) dan wajib disertai komentar `// SAFETY: ...` yang menjelaskan secara rinci mengapa invariannya aman.
+### WHAT YOU MUST DO:
+- Trace the root cause in the business logic or data flow of the production code.
+- You **may only** modify an existing test if the user explicitly requests a change to the business specification, and you must explain the reason for the test change to the user.
 
 ---
 
-## 4. Penanganan Error (Error Handling) yang Eksplisit
+## 2. Ownership, Borrowing, and Lifetimes Discipline
 
-Kode produksi tidak boleh mengalami *crash* (`panic!`) karena input yang tidak valid atau kegagalan I/O yang bisa diprediksi.
+The borrow checker in Rust exists to guarantee memory and concurrency safety. Do not fight it by damaging the code architecture.
 
-### DILARANG KERAS:
-- **Menggunakan `.unwrap()` dan `.expect()` di Kode Produksi:** Jangan pernah menggunakan keduanya di luar kode test (`#[cfg(test)]`), kecuali Anda dapat membuktikan secara matematis/statis bahwa nilainya tidak mungkin `None`/`Err` (dan itu pun lebih disarankan menggunakan *pattern matching*).
-- **Menelan Error Secara Diam-diam:** Dilarang mengabaikan `Result` menggunakan `let _ = fungsi_berisiko();` atau mengubahnya menjadi `.ok()` tanpa menangani skenario kegagalannya.
-- **Menggunakan `panic!`, `todo!`, atau `unimplemented!`:** Jangan meninggalkan makro ini pada kode yang diklaim sudah selesai.
+### STRICTLY FORBIDDEN:
+- **Spamming `.clone()`:** Do not blindly add `.clone()` or `.to_owned()` just to silence *borrow checker* errors (`cannot move out of...` or `borrowed value does not live long enough`) without understanding who should be the owner of that data.
+- **Misusing Smart Pointers:** Do not immediately wrap types in `Rc<RefCell<T>>` or `Arc<Mutex<T>>` just because you struggle to structure *ownership* or *mutable references*, unless it is genuinely required for shared state across *threads* or for a legitimate graph structure.
+- **Faking `'static` Lifetimes:** Do not force a `T: 'static` bound or use `Box::leak` just because you are too lazy to define the correct *lifetime annotations* (`'a`).
 
-### YANG HARUS DILAKUKAN:
-- Gunakan `Result<T, E>` dan propagasi error menggunakan operator `?`.
-- Buat tipe error yang bermakna (menggunakan `enum` khusus, `thiserror` untuk *library*, atau `anyhow` untuk *application layer* sesuai konvensi proyek).
-- Gunakan kombinator yang idiomatik seperti `.map_err()`, `.ok_or_else()`, `if let`, atau `let ... else`.
-
----
-
-## 5. Kepatuhan Terhadap Compiler & Clippy
-
-Peringatan (*warnings*) dari `rustc` dan `clippy` adalah sinyal adanya potensi *bug* atau kode yang tidak idiomatik.
-
-### DILARANG KERAS:
-- **Membungkam Linter:** Jangan pernah menambahkan atribut seperti `#[allow(dead_code)]`, `#[allow(unused_variables)]`, `#[allow(clippy::all)]`, atau atribut sejenis hanya untuk membuat *build* bersih dari peringatan.
-- **Melewati Pengecekan Tipe dengan `Any`:** Jangan menggunakan `Box<dyn Any>` atau serialisasi ke `serde_json::Value` semata-mata untuk menghindari penulisan tipe generik atau *trait* yang tepat.
-
-### YANG HARUS DILAKUKAN:
-- Jika ada `dead_code`, hapus kode yang tidak terpakai tersebut atau hubungkan dengan modul yang seharusnya memanggilnya.
-- Jalankan `cargo check`, `cargo test`, dan `cargo clippy -- -D warnings` sebagai standar verifikasi sebelum menyatakan pekerjaan selesai.
-- Manfaatkan sistem tipe Rust secara maksimal (*Type-Driven Design*): gunakan `enum` dan `newtype pattern` agar kondisi yang tidak valid tidak mungkin direpresentasikan di dalam kode (*make illegal states unrepresentable*).
+### WHAT YOU MUST DO:
+- Design the data flow clearly: decide which functions need full ownership (`T`), which only need to read (`&T`), and which need to modify (`&mut T`).
+- Use *slices* (`&[T]`, `&str`) instead of references to full collections (`&Vec<T>`, `&String`) in function parameters.
+- When you run into a complex *borrow checker* problem, restructure the *scope* of your variables or split the struct into more modular parts.
 
 ---
 
-## 6. Protokol Saat Mengalami Kebuntuan (Stuck Protocol)
+## 3. Memory Safety & the Ban on `unsafe`
 
-Jika Anda gagal mengompilasi kode atau menyelesaikan sebuah *bug* setelah beberapa kali percobaan:
-1. **BERHENTI** melakukan perubahan acak (*shotgun debugging*) seperti menambah `.clone()`, mengubah tanda `&`, atau mengutak-atik test.
-2. **ANALISIS** pesan error dari `rustc` secara menyeluruh—kompilator Rust memberikan petunjuk struktur yang sangat akurat.
-3. **TANYAKAN KEPADA PENGGUNA** jika ada ambiguitas pada desain arsitektur atau logika domain daripada memaksakan kompromi teknis yang buruk.
+Rust's main strength is its compile-time guarantee of *memory safety*.
+
+### STRICTLY FORBIDDEN:
+- **Using `unsafe` Blocks:** You are strictly forbidden from writing `unsafe { ... }` blocks, `unsafe fn`, or `unsafe impl` to bypass compiler rules.
+- **Type Transmutation:** Never use `std::mem::transmute`, *raw pointers* (`*const T`, `*mut T`), or `MaybeUninit` as a shortcut to work around type or *lifetime* problems.
+
+### EXCEPTION:
+- `unsafe` is only permitted when the user specifically requests it (for example, for FFI integration with C) and it must be accompanied by a `// SAFETY: ...` comment that explains in detail why the invariants hold.
+
+---
+
+## 4. Explicit Error Handling
+
+Production code must not *crash* (`panic!`) because of invalid input or predictable I/O failures.
+
+### STRICTLY FORBIDDEN:
+- **Using `.unwrap()` and `.expect()` in Production Code:** Never use either outside of test code (`#[cfg(test)]`), unless you can prove mathematically/statically that the value can never be `None`/`Err` (and even then, *pattern matching* is preferred).
+- **Silently Swallowing Errors:** Ignoring a `Result` with `let _ = risky_function();` or converting it with `.ok()` without handling the failure scenario is forbidden.
+- **Using `panic!`, `todo!`, or `unimplemented!`:** Do not leave these macros in code that is claimed to be finished.
+
+### WHAT YOU MUST DO:
+- Use `Result<T, E>` and propagate errors with the `?` operator.
+- Create meaningful error types (using a dedicated `enum`, `thiserror` for *libraries*, or `anyhow` for the *application layer*, following project conventions).
+- Use idiomatic combinators such as `.map_err()`, `.ok_or_else()`, `if let`, or `let ... else`.
+
+---
+
+## 5. Compiler & Clippy Compliance
+
+Warnings from `rustc` and `clippy` are signals of potential *bugs* or non-idiomatic code.
+
+### STRICTLY FORBIDDEN:
+- **Silencing Linters:** Never add attributes such as `#[allow(dead_code)]`, `#[allow(unused_variables)]`, `#[allow(clippy::all)]`, or similar just to make the *build* free of warnings.
+- **Bypassing Type Checking with `Any`:** Do not use `Box<dyn Any>` or serialization to `serde_json::Value` solely to avoid writing the proper generic types or *traits*.
+
+### WHAT YOU MUST DO:
+- If there is `dead_code`, remove the unused code or connect it to the module that should be calling it.
+- Run `cargo check`, `cargo test`, and `cargo clippy -- -D warnings` as the standard verification before declaring work complete.
+- Make full use of Rust's type system (*Type-Driven Design*): use `enum`s and the `newtype pattern` so that invalid states cannot be represented in code (*make illegal states unrepresentable*).
+
+---
+
+## 6. Protocol When Stuck (Stuck Protocol)
+
+If you fail to compile the code or resolve a *bug* after several attempts:
+1. **STOP** making random changes (*shotgun debugging*) such as adding `.clone()`, changing `&` signs, or tinkering with tests.
+2. **ANALYZE** the `rustc` error messages thoroughly—the Rust compiler gives very accurate structural hints.
+3. **ASK THE USER** if there is ambiguity in the architectural design or domain logic, rather than forcing a poor technical compromise.

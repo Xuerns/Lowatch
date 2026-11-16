@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { StopwatchDto } from "../api";
   import { computeElapsedMs, formatElapsed } from "../time";
+  import StopwatchDial from "./StopwatchDial.svelte";
 
   interface Props {
     stopwatch: StopwatchDto;
@@ -44,7 +45,7 @@
 <section
   class="focus-widget"
   data-tauri-drag-region
-  aria-label="Mode fokus stopwatch {stopwatch.name}"
+  aria-label="Focus mode stopwatch {stopwatch.name}"
 >
   <div class="focus-top" data-tauri-drag-region>
     <span class="focus-name" data-tauri-drag-region title={stopwatch.name}>
@@ -54,29 +55,57 @@
       type="button"
       class="btn-exit"
       onclick={() => onExit()}
-      aria-label="Keluar dari mode fokus (Esc)"
-      title="Keluar dari mode fokus (Esc)"
+      aria-label="Return to full view (Esc)"
+      title="Return to full view (Esc)"
     >
-      ✕
+      <svg
+        width="14"
+        height="14"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M15 3h6v6" />
+        <path d="M9 21H3v-6" />
+        <path d="M21 3l-7 7" />
+        <path d="M3 21l7-7" />
+      </svg>
     </button>
   </div>
 
-  <div class="focus-bottom" data-tauri-drag-region>
-    <div
-      class="focus-time"
-      data-status={stopwatch.status}
-      data-tauri-drag-region
-    >
-      {formattedTime.formatted}
-    </div>
-    <button
-      type="button"
-      class="btn-action"
-      data-status={stopwatch.status}
-      onclick={handlePrimaryAction}
-    >
-      {primaryActionLabel}
-    </button>
+  <div class="focus-body" data-tauri-drag-region>
+    <StopwatchDial status={stopwatch.status} {elapsedMs} size={188}>
+      <div
+        class="focus-time"
+        data-status={stopwatch.status}
+        data-tauri-drag-region
+      >
+        {formattedTime.formatted}
+      </div>
+      <button
+        type="button"
+        class="btn-action"
+        data-status={stopwatch.status}
+        onclick={handlePrimaryAction}
+        aria-label="{primaryActionLabel} stopwatch {stopwatch.name}"
+        title={primaryActionLabel}
+      >
+        {#if stopwatch.status === "running"}
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <rect x="6" y="4" width="4" height="16" rx="1" />
+            <rect x="14" y="4" width="4" height="16" rx="1" />
+          </svg>
+        {:else}
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <polygon points="7 4 20 12 7 20 7 4" />
+          </svg>
+        {/if}
+      </button>
+    </StopwatchDial>
   </div>
 </section>
 
@@ -86,12 +115,12 @@
     height: 100vh;
     box-sizing: border-box;
     overflow: hidden;
-    background-color: #111111;
-    border: 1px solid #262626;
-    padding: 10px 12px;
+    background-color: #202020;
+    border: 1px solid #383838;
+    padding: 10px 12px 12px;
     display: flex;
     flex-direction: column;
-    justify-content: space-between;
+    gap: 4px;
     user-select: none;
     cursor: grab;
   }
@@ -148,19 +177,19 @@
     border-color: #262626;
   }
 
-  .focus-bottom {
+  .focus-body {
+    flex: 1;
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    min-width: 0;
+    justify-content: center;
+    min-height: 0;
   }
 
   .focus-time {
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
     font-variant-numeric: tabular-nums;
     font-feature-settings: "tnum" 1;
-    font-size: 1.625rem;
+    font-size: 1.5rem;
     font-weight: 700;
     line-height: 1.1;
     letter-spacing: -0.02em;
@@ -176,16 +205,16 @@
   }
 
   .btn-action {
-    min-width: 78px;
-    height: 34px;
-    padding: 0 12px;
+    width: 32px;
+    height: 32px;
+    padding: 0;
     background-color: #f5f5f5;
-    color: #0a0a0a;
+    color: #202020;
     border: 1px solid #f5f5f5;
-    border-radius: 6px;
-    font-family: inherit;
-    font-size: 0.8125rem;
-    font-weight: 600;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     cursor: pointer;
     flex-shrink: 0;
     transition:
@@ -200,13 +229,13 @@
   }
 
   .btn-action[data-status="running"] {
-    background-color: #171717;
+    background-color: #363636;
     color: #f5f5f5;
-    border: 1px solid #404040;
+    border: 1px solid #525252;
   }
 
   .btn-action[data-status="running"]:hover {
-    background-color: #1f1f1f;
-    border-color: #525252;
+    background-color: #424242;
+    border-color: #666666;
   }
 </style>

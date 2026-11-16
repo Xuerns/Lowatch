@@ -1,217 +1,218 @@
-# PRD — Multi Stopwatch (Desktop App)
+# PRD — Lowatch (Desktop App)
 
 | | |
 |---|---|
-| **Nama sementara** | Multi Stopwatch |
-| **Versi dokumen** | 1.0 |
-| **Tanggal** | 16 November 2026 |
-| **Status** | Draft untuk implementasi MVP |
-| **Platform target** | Windows 10/11 (utama), macOS & Linux X11 (best-effort) |
+| **App name** | Lowatch |
+| **Document version** | 1.1 |
+| **Date** | November 16, 2026 |
+| **Status** | Implemented MVP |
+| **Target platform** | Windows 10/11 (primary), macOS & Linux X11 (best-effort) |
+| **License** | Apache-2.0 |
 
 ---
 
-## 1. Ringkasan
+## 1. Overview
 
-Multi Stopwatch adalah aplikasi desktop ringan untuk menjalankan **banyak stopwatch sekaligus**, di mana setiap stopwatch punya **nama sendiri**. Pengguna bisa start, pause, dan reset tiap stopwatch secara independen. Tersedia **Focus Mode**: jendela aplikasi mengecil menjadi widget kecil yang menempel di **pojok kanan atas layar** dan selalu di atas jendela lain, sehingga waktu tetap terlihat tanpa mengganggu pekerjaan.
+**Lowatch** is a lightweight desktop application for running **multiple stopwatches simultaneously**, where each stopwatch has its **own name**. Users can start, pause, reset, and rename each stopwatch independently in a responsive grid layout. It also includes **Focus Mode**: the application window shrinks into a compact widget pinned to the **top-right corner of the screen** and stays always on top of other windows, keeping time visible without interrupting your work.
 
-Hal terpenting: **waktu stopwatch tidak boleh hilang**. Stopwatch yang di-pause tetap menyimpan waktunya saat aplikasi ditutup dan dibuka kembali.
+Most importantly: **stopwatch time must never be lost**. Paused stopwatches preserve their elapsed time across application restarts.
 
-### Prinsip desain
+### Design Principles
 
-1. **Sederhana** — satu tabel database, tanpa ORM, tanpa state management library, tanpa backend service.
-2. **Rust adalah sumber kebenaran** — semua logika waktu dan penyimpanan ada di Rust. Frontend hanya menampilkan.
-3. **Akurat karena timestamp, bukan counter** — waktu dihitung dari selisih timestamp, bukan dari `setInterval` yang menambah angka. Jadi tetap akurat walau jendela di-minimize atau tick tertunda.
+1. **Simple** — a single database table, no ORM, no external state management library, no backend server.
+2. **Rust is the source of truth** — all timing logic and persistence live in Rust; the frontend is purely presentational.
+3. **Accurate via timestamps, not tick counters** — elapsed time is computed from timestamp deltas rather than incrementing a `setInterval` counter, so it remains accurate even when the window is minimized or ticks are throttled.
 
 ---
 
-## 2. Tujuan dan Non-Goals
+## 2. Goals and Non-Goals
 
-### Tujuan (MVP)
+### Goals (MVP)
 
-- Membuat, menamai, mengubah nama, dan menghapus banyak stopwatch.
-- Start/resume, pause, dan reset tiap stopwatch secara independen.
-- Focus Mode: widget kecil di kanan atas layar, always-on-top.
-- Data persisten: stopwatch yang di-pause **tidak reset** setelah aplikasi ditutup.
-- Aplikasi kecil, cepat dibuka, dan hemat resource.
+- Create, name, rename, and delete multiple stopwatches.
+- Start/resume, pause, and reset each stopwatch independently.
+- **Focus Mode**: compact always-on-top widget in the top-right corner of the screen.
+- **Persistent data**: paused stopwatches **do not reset** when the application is closed.
+- Small footprint, fast startup, and low resource usage.
+- Clean frameless desktop UI with an integrated custom titlebar (`decorations: false`), unified `#202020` background, and responsive grid layout.
 
-### Non-Goals (sengaja tidak dikerjakan di MVP)
+### Non-Goals (intentionally excluded from MVP)
 
-- Lap / split time.
+- Lap / split times.
 - Countdown timer.
-- Riwayat sesi, statistik, atau laporan.
-- Sinkronisasi cloud / akun pengguna.
+- Session history, statistics, or reports.
+- Cloud sync / user accounts.
 - Export (CSV/JSON).
-- System tray, notifikasi, global hotkey.
-- Drag & drop untuk mengurutkan stopwatch.
-- Multi-bahasa (UI memakai Bahasa Indonesia).
-- Auto-update.
+- System tray, notifications, global hotkeys.
+- Drag & drop reordering of stopwatches.
+- Multi-language localization (UI is in English).
+- Auto-updater.
 
 ---
 
-## 3. Pengguna dan Use Case
+## 3. Users and Use Cases
 
-**Pengguna utama:** individu yang perlu melacak durasi beberapa aktivitas paralel, misalnya mahasiswa, freelancer, atau developer.
+**Primary users:** individuals who need to track the duration of multiple parallel activities, such as students, freelancers, or developers.
 
-| # | Use case |
+| # | Use Case |
 |---|---|
-| UC-1 | Freelancer menjalankan stopwatch "Klien A" dan "Klien B" bergantian untuk mencatat jam kerja. |
-| UC-2 | Developer mengukur waktu "Coding", "Meeting", dan "Review" dalam satu hari. |
-| UC-3 | Pengguna menutup aplikasi di tengah hari, lalu membukanya lagi besok. Semua waktu yang tadi di-pause masih ada. |
-| UC-4 | Pengguna sedang mengetik dokumen dan ingin stopwatch tetap terlihat kecil di pojok kanan atas layar. |
+| UC-1 | A freelancer runs "Client A" and "Client B" stopwatches alternately to track billable hours. |
+| UC-2 | A developer measures time spent on "Coding", "Meeting", and "Review" in a single day. |
+| UC-3 | A user closes the app midday and reopens it the next day; all paused times are still intact. |
+| UC-4 | A user is writing a document and wants one stopwatch visible as a small widget in the top-right corner of the screen. |
 
 ---
 
-## 4. Requirement Fungsional
+## 4. Functional Requirements
 
-Prioritas: **P0** = wajib MVP, **P1** = sebaiknya ada di MVP, **P2** = nanti.
+Priority: **P0** = required for MVP, **P1** = recommended for MVP, **P2** = future.
 
-| ID | Requirement | Prioritas |
+| ID | Requirement | Priority |
 |---|---|---|
-| F-01 | Pengguna dapat membuat stopwatch baru. Jika nama kosong, otomatis bernama "Stopwatch N". | P0 |
-| F-02 | Setiap stopwatch punya nama yang bisa diubah (inline edit). Nama di-trim, maksimal 50 karakter, boleh duplikat. | P0 |
-| F-03 | Tombol **Start/Resume** menjalankan stopwatch. | P0 |
-| F-04 | Tombol **Pause** menghentikan sementara dan menyimpan waktu terkumpul. | P0 |
-| F-05 | Tombol **Reset** mengembalikan waktu ke 00:00:00 dan menghentikan stopwatch. | P0 |
-| F-06 | Beberapa stopwatch bisa berjalan bersamaan dan tidak saling memengaruhi. | P0 |
-| F-07 | Pengguna dapat menghapus stopwatch (dengan konfirmasi). | P0 |
-| F-08 | **Focus Mode**: jendela mengecil jadi widget di kanan atas layar, always-on-top, menampilkan satu stopwatch terpilih. | P0 |
-| F-09 | Keluar dari Focus Mode mengembalikan ukuran, posisi, dan dekorasi jendela seperti sebelumnya. | P0 |
-| F-10 | **Persistensi:** semua stopwatch (nama, waktu, urutan) tersimpan di database lokal dan dimuat ulang saat aplikasi dibuka. | P0 |
-| F-11 | Saat aplikasi ditutup, stopwatch yang sedang berjalan otomatis di-pause pada saat penutupan dan waktunya tersimpan. | P0 |
-| F-12 | Pemulihan setelah crash/mati listrik: stopwatch yang masih berstatus running saat startup di-pause di titik heartbeat terakhir. | P1 |
-| F-13 | Hanya satu instance aplikasi yang boleh berjalan (instance kedua memfokuskan jendela yang ada). | P1 |
-| F-14 | Tombol `Esc` keluar dari Focus Mode. | P1 |
-| F-15 | Konfirmasi singkat sebelum Reset jika waktu stopwatch > 0. | P1 |
-| F-16 | Ingat ukuran/posisi jendela mode normal. | P2 |
-| F-17 | Urutkan stopwatch dengan drag & drop. | P2 |
-| F-18 | Tema gelap/terang mengikuti sistem. | P2 |
+| F-01 | Users can create a new stopwatch. If the name is empty, it defaults to `"Stopwatch N"`. | P0 |
+| F-02 | Each stopwatch has an editable name (inline edit). Names are trimmed, max 50 characters, and duplicates are allowed. | P0 |
+| F-03 | **Start/Resume** button starts or resumes the stopwatch. | P0 |
+| F-04 | **Pause** button pauses the stopwatch and saves accumulated time. | P0 |
+| F-05 | **Reset** button resets elapsed time to `00:00:00` and stops the stopwatch. | P0 |
+| F-06 | Multiple stopwatches can run simultaneously without affecting each other. | P0 |
+| F-07 | Users can delete a stopwatch (with confirmation). | P0 |
+| F-08 | **Focus Mode**: shrinks the window into an always-on-top widget in the top-right corner displaying one selected stopwatch. | P0 |
+| F-09 | Exiting Focus Mode restores the previous window size, position, and decoration state. | P0 |
+| F-10 | **Persistence:** all stopwatches (name, elapsed time, order) are stored in a local database and reloaded on startup. | P0 |
+| F-11 | When closing the app, any running stopwatches are automatically paused at close time and their time is saved. | P0 |
+| F-12 | Crash / power-loss recovery: stopwatches still marked running on startup are paused at their last `heartbeat_ms`. | P1 |
+| F-13 | Single-instance enforcement (opening a second instance focuses the existing window). | P1 |
+| F-14 | `Esc` key exits Focus Mode. | P1 |
+| F-15 | Simple confirmation before Reset when elapsed time > 0. | P1 |
+| F-16 | Remember normal-mode window size and position across restarts. | P2 |
+| F-17 | Reorder stopwatches via drag & drop. | P2 |
+| F-18 | System light/dark theme switching. | P2 |
 
 ---
 
-## 5. Perilaku Detail
+## 5. Detailed Behavior
 
-### 5.1 Model state stopwatch
+### 5.1 Stopwatch State Model
 
-Setiap stopwatch hanya menyimpan dua nilai waktu:
+Each stopwatch stores only two timing values:
 
-- `accumulated_ms` — total waktu yang sudah terkumpul saat tidak berjalan.
-- `started_at_ms` — timestamp Unix (ms) saat terakhir di-start; `NULL` jika tidak berjalan.
+- `accumulated_ms` — total milliseconds accumulated while not running.
+- `started_at_ms` — Unix timestamp (ms) when last started; `NULL` when not running.
 
 ```
 elapsed(now) = accumulated_ms + (started_at_ms != NULL ? now - started_at_ms : 0)
 ```
 
-Status diturunkan, tidak disimpan:
+Status is derived, not stored:
 
-| Status | Kondisi | Label tombol utama |
+| Status | Condition | Primary Button Label |
 |---|---|---|
-| **Idle** | `started_at_ms` NULL dan `accumulated_ms` = 0 | Start |
-| **Running** | `started_at_ms` tidak NULL | Pause |
-| **Paused** | `started_at_ms` NULL dan `accumulated_ms` > 0 | Resume |
+| **Idle** | `started_at_ms` is `NULL` and `accumulated_ms == 0` | Start |
+| **Running** | `started_at_ms` is not `NULL` | Pause |
+| **Paused** | `started_at_ms` is `NULL` and `accumulated_ms > 0` | Resume |
 
-### 5.2 Transisi
+### 5.2 State Transitions
 
-| Aksi | Dari Idle / Paused | Dari Running |
+| Action | From Idle / Paused | From Running |
 |---|---|---|
 | **Start / Resume** | `started_at_ms = now` | No-op (idempotent) |
 | **Pause** | No-op | `accumulated_ms += now - started_at_ms`, `started_at_ms = NULL` |
 | **Reset** | `accumulated_ms = 0` | `accumulated_ms = 0`, `started_at_ms = NULL` |
 
-Catatan: `now` diambil **sekali** di Rust per aksi, lalu dipakai untuk seluruh perhitungan aksi itu.
+Note: `now` is captured **once** in Rust per action and reused for all calculations within that action.
 
-### 5.3 Saat aplikasi ditutup dan dibuka
+### 5.3 Application Close and Startup
 
-- **Penutupan normal:** pada event `CloseRequested` (dan `RunEvent::Exit` untuk jaga-jaga, mis. Cmd+Q di macOS), Rust mem-pause semua stopwatch yang running dalam **satu transaksi**, lalu aplikasi keluar.
-- **Pembukaan:** semua stopwatch dimuat dari database. Stopwatch yang sebelumnya di-pause tetap di-pause dengan waktu yang sama. Tidak ada yang berjalan otomatis.
-- **Crash / mati listrik (F-12):** selama ada stopwatch running, Rust menulis `heartbeat_ms` setiap ±15 detik. Saat startup, setiap baris dengan `started_at_ms` tidak NULL dipulihkan menjadi `accumulated_ms += (heartbeat_ms - started_at_ms)` dan `started_at_ms = NULL`. Kehilangan waktu maksimal ±15 detik, dan tidak pernah menghitung waktu saat aplikasi mati.
+- **Normal close:** on `CloseRequested` (and `RunEvent::Exit` as a safeguard, e.g., Cmd+Q on macOS), Rust pauses all running stopwatches in a **single transaction**, then exits.
+- **Startup:** all stopwatches are loaded from the database. Previously paused stopwatches remain paused with the exact same elapsed time. Nothing auto-starts.
+- **Crash / power loss (F-12):** while any stopwatch is running, Rust updates `heartbeat_ms` every ±15 seconds. On startup, any row with non-NULL `started_at_ms` is recovered as `accumulated_ms += (heartbeat_ms - started_at_ms)` and `started_at_ms = NULL`. Maximum time loss is ±15 seconds, and offline time is never counted.
 
-> **Keputusan produk:** stopwatch yang running saat aplikasi ditutup **tidak melanjutkan hitungan** selama aplikasi mati. Ini lebih aman dan sesuai ekspektasi "stopwatch". Lihat bagian 13 untuk alternatifnya.
+> **Product decision:** stopwatches running when the app closes **do not keep counting** while the app is closed. This is safer and matches typical desktop stopwatch expectations. See Section 13 for alternatives.
 
-### 5.3.1 Close = quit
+#### 5.3.1 Close = Quit
 
-Pada MVP, menutup jendela berarti keluar dari aplikasi (tanpa tray). Ini juga berlaku saat Focus Mode.
+In MVP, closing the window quits the application (no system tray). This also applies while in Focus Mode.
 
 ### 5.4 Focus Mode
 
-**Masuk (`enter_focus_mode(id)`)**, seluruhnya dikerjakan di Rust:
+**Enter (`enter_focus_mode(id)`), handled entirely in Rust:**
 
-1. Simpan geometri jendela saat ini di memori (ukuran, posisi, status maximized, decorations).
-2. Jika maximized, un-maximize dulu.
-3. Hilangkan dekorasi window (title bar), nonaktifkan resize, set **always-on-top**.
-4. Ubah ukuran jendela menjadi **±280 × 96 px (logical)**.
-5. Posisikan di **pojok kanan atas** area kerja (work area) monitor tempat jendela berada, dengan margin 16 px. Pada multi-monitor, gunakan monitor saat ini, bukan monitor utama.
-6. Frontend beralih ke tampilan compact.
+1. Save current window geometry in memory (size, position, maximized state, decorations, resizable).
+2. If maximized, unmaximize first.
+3. Disable window decorations and resizing, and enable **always-on-top**.
+4. Resize the window to **280 × 96 px (logical)**.
+5. Position the window at the **top-right corner** of the current monitor's work area with a 16 px margin. On multi-monitor setups, use the current monitor rather than the primary monitor.
+6. Switch the frontend to the compact view.
 
-**Tampilan Focus Mode:** nama stopwatch, waktu `HH:MM:SS`, tombol Pause/Resume, dan tombol keluar. Seluruh widget bisa di-drag (`data-tauri-drag-region`) karena title bar sudah dihilangkan.
+**Focus Mode UI:** stopwatch name, `HH:MM:SS` time display, Pause/Resume button, and exit button (`✕`). The entire widget is draggable (`data-tauri-drag-region`).
 
-**Keluar (`exit_focus_mode()`):** kembalikan semua properti dari geometri yang disimpan (decorations, resizable, always-on-top = false, ukuran, posisi, maximized), lalu frontend kembali ke tampilan normal.
+**Exit (`exit_focus_mode()`):** restore all saved window properties (`decorations`, `resizable`, `always-on-top = false`, size, position, maximized state), then return the frontend to normal mode.
 
-**Aturan tambahan:**
+**Additional rules:**
 
-- Stopwatch yang sedang berjalan tetap berjalan saat masuk/keluar Focus Mode.
-- Focus Mode **tidak dipersist**: setelah restart, aplikasi selalu mulai di mode normal.
-- Menutup jendela saat Focus Mode berperilaku sama seperti 5.3.
-- Reset dan hapus tidak tersedia di Focus Mode (mencegah salah klik di widget kecil).
+- Running stopwatches continue running when entering or exiting Focus Mode.
+- Focus Mode is **not persisted**: on restart, the app always opens in normal mode.
+- Closing the window in Focus Mode behaves the same as Section 5.3.
+- Reset and Delete are unavailable in Focus Mode to prevent accidental clicks on the compact widget.
 
-### 5.5 Validasi dan batasan
+### 5.5 Validation and Constraints
 
-- Nama: trim spasi, 1–50 karakter. Jika kosong setelah trim, pakai nama default (untuk create) atau tolak perubahan (untuk rename).
-- Jumlah stopwatch tidak dibatasi secara keras. Daftar di UI harus bisa di-scroll.
-- Format tampilan: `HH:MM:SS` dengan 1 digit desimal (tenth of second) di mode normal. Jika lebih dari 99 jam, jumlah digit jam bertambah (tidak dipotong). Focus Mode menampilkan tanpa desimal.
+- Name: trimmed, 1–50 characters, no control characters. If empty on create, generate a default name; if invalid on rename, reject with an error.
+- No hard limit on the number of stopwatches; the grid container scrolls vertically.
+- Display format: `HH:MM:SS.t` (with tenths of a second) in normal mode. Hours expand naturally beyond 99 hours without truncation. Focus Mode omits tenths of a second (`HH:MM:SS`).
 
 ---
 
 ## 6. Tech Stack
 
-| Lapisan | Pilihan | Catatan |
+| Layer | Choice | Notes |
 |---|---|---|
-| Shell desktop | **Tauri 2** | Binary kecil, memakai WebView bawaan OS. |
-| Backend | **Rust** (full) | Seluruh logika waktu, database, dan manipulasi window. |
-| Frontend | **SvelteKit** + Svelte 5 + TypeScript | Mode SPA: `@sveltejs/adapter-static`, `ssr = false`. |
-| Styling | CSS biasa (scoped style Svelte) | Tanpa UI library/Tailwind agar tetap ringan. |
-| State frontend | Svelte 5 runes (`$state`) di modul `.svelte.ts` | Tanpa library tambahan. |
-| Database | **SQLite via `rusqlite`** (fitur `bundled`) | Lihat 6.1. |
-| Error handling | `thiserror` | Error di-serialize ke string untuk frontend. |
-| Plugin Tauri | `tauri-plugin-single-instance` (P1) | Mencegah dua proses menulis ke DB yang sama. |
+| Desktop shell | **Tauri 2** | Small binary using the OS native WebView. |
+| Backend | **Rust** (full) | All timing logic, SQLite persistence, and Focus Mode window manipulation. |
+| Frontend | **SvelteKit** + Svelte 5 + TypeScript | SPA mode: `@sveltejs/adapter-static`, `ssr = false`. |
+| Styling | Plain CSS (Svelte scoped styles) | No external UI library or Tailwind to keep bundle size minimal. |
+| Frontend state | Svelte 5 runes (`$state`, `$derived`) | In `src/lib/stores/stopwatches.svelte.ts`. |
+| Database | **SQLite via `rusqlite`** (`bundled` feature) | See Section 6.1. |
+| Error handling | `thiserror` | Errors serialize to readable English strings for the frontend. |
+| Tauri plugins | `tauri-plugin-single-instance` (P1) | Prevents multiple processes from writing to the same DB. |
 
-### 6.1 Kenapa SQLite via `rusqlite`
+### 6.1 Why SQLite via `rusqlite`
 
-Data aplikasi ini kecil (puluhan baris, satu tabel), tetapi **wajib tahan crash**. Pertimbangannya:
+The dataset is small (tens of rows, one table), but **must be crash-safe**:
 
-| Opsi | Penilaian |
+| Option | Assessment |
 |---|---|
-| **SQLite + `rusqlite`** ✅ | Satu file, tulis atomik dan tahan crash secara otomatis, API sinkron sederhana (tidak perlu async runtime tambahan), hampir nol konfigurasi. Cocok walau data kecil. |
-| File JSON | Paling sederhana di awal, tapi perlu menulis sendiri atomic write (tulis ke temp lalu rename) agar tidak korup saat crash. Mudah jadi lebih rumit dari SQLite. |
-| `sqlx` | Terlalu berat: async, compile-time check, dan tooling migrasi tidak diperlukan. |
-| ORM (Diesel/SeaORM) | Overengineering untuk satu tabel. |
-| `tauri-plugin-sql` | Mengekspos SQL ke JavaScript. Bertentangan dengan keputusan "backend full Rust". |
+| **SQLite + `rusqlite`** ✅ | Single file, atomic crash-safe writes, simple synchronous API (no extra async runtime needed), near-zero configuration. |
+| JSON file | Simpler initially, but requires manual atomic writes (write temp + rename) to avoid corruption on crash. |
+| `sqlx` | Overkill: async runtime, compile-time query checking, and migration tooling are unnecessary. |
+| ORM (Diesel / SeaORM) | Over-engineering for a single table. |
+| `tauri-plugin-sql` | Exposes SQL to JavaScript, violating the "Rust is source of truth" principle. |
 
-**Migrasi** cukup memakai `PRAGMA user_version`:
+**Migrations** use `PRAGMA user_version`:
 
 ```rust
 let v: i32 = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
 if v < 1 {
     conn.execute_batch("CREATE TABLE ...; PRAGMA user_version = 1;")?;
 }
-// versi berikutnya: if v < 2 { ... }
 ```
 
-**Pengaturan koneksi:** `journal_mode = WAL`, `foreign_keys = ON`. Satu koneksi dibungkus `Mutex<Connection>` dan disimpan di Tauri `State`. Itu cukup, karena beban tulis sangat rendah.
+**Connection settings:** `journal_mode = WAL`, `foreign_keys = ON`. A single connection wrapped in `Mutex<Connection>` is managed in Tauri `AppState`.
 
-**Lokasi file:** `app_data_dir()` milik Tauri, nama file `multi-stopwatch.db`.
+**File location:** Tauri `app_data_dir()`, filename `multi-stopwatch.db`.
 
 ---
 
-## 7. Arsitektur
+## 7. Architecture
 
 ```
 ┌─────────────────────── Tauri App ───────────────────────┐
 │                                                         │
 │  SvelteKit (WebView)            Rust (src-tauri)        │
 │  ┌──────────────────┐  invoke  ┌────────────────────┐   │
-│  │ UI + ticker 100ms│ ───────► │ commands.rs        │   │
-│  │ hitung elapsed   │ ◄─────── │ (validasi, logika) │   │
-│  │ dari snapshot    │   DTO    ├────────────────────┤   │
+│  │ UI + 100ms ticker│ ───────► │ commands.rs        │   │
+│  │ compute elapsed  │ ◄─────── │ (validation, logic)│   │
+│  │ from snapshot    │   DTO    ├────────────────────┤   │
 │  └──────────────────┘          │ db.rs (rusqlite)   │──►│ multi-stopwatch.db
 │                                │ focus.rs (window)  │   │
 │                                │ heartbeat thread   │   │
@@ -219,50 +220,56 @@ if v < 1 {
 └─────────────────────────────────────────────────────────┘
 ```
 
-### Alur data
+### Data Flow
 
-1. Saat startup, frontend memanggil `list_stopwatches` dan menyimpan hasilnya di store.
-2. Setiap aksi (start/pause/reset/rename/delete) adalah **satu command**. Rust memvalidasi, menulis ke DB, lalu mengembalikan DTO terbaru, dan store frontend diperbarui dari DTO itu.
-3. Detik berjalan **tidak ditulis ke database**. Frontend memiliki **satu ticker global** (≈100 ms, aktif hanya bila ada stopwatch running) yang menghitung `elapsed = accumulated_ms + (Date.now() - started_at_ms)` untuk tiap kartu.
-4. Database hanya ditulis saat ada aksi pengguna, saat penutupan, dan saat heartbeat (±15 detik, hanya jika ada yang running).
+1. On startup, the frontend invokes `list_stopwatches` and populates the store.
+2. Each action (start/pause/reset/rename/delete) is **one IPC command**. Rust validates, writes to SQLite, and returns the updated DTO.
+3. Running seconds are **not written to the database**. The frontend runs **one global ticker** (~100 ms, active only while at least one stopwatch is running) computing `elapsed = accumulated_ms + (Date.now() - started_at_ms)`.
+4. Database writes occur only on user actions, app exit, and heartbeat ticks (±15 seconds while running).
 
-Karena waktu dihitung dari timestamp, jendela yang di-minimize atau WebView yang di-throttle **tidak membuat waktu meleset**.
+Because elapsed time is derived from timestamps, minimizing the window or WebView throttling **never causes time drift**.
 
-### Struktur proyek
+### Project Structure
 
 ```
-multi-stopwatch/
-├─ src/                          # SvelteKit
+Lowatch/
+├─ assets/
+│  └─ Logo.png                   # Source application logo
+├─ docs/
+│  └─ PRD.md
+├─ src/                          # SvelteKit frontend
 │  ├─ routes/
 │  │  ├─ +layout.ts              # export const ssr = false; prerender = false
-│  │  ├─ +layout.svelte
-│  │  └─ +page.svelte            # list stopwatch + switch mode normal/focus
+│  │  ├─ +layout.svelte          # Global styles (#202020 background)
+│  │  └─ +page.svelte            # Custom titlebar, toolbar, grid view, focus switch
 │  └─ lib/
-│     ├─ api.ts                  # wrapper tipis untuk invoke()
-│     ├─ time.ts                 # computeElapsed(), formatElapsed()
+│     ├─ api.ts                  # Thin invoke() wrappers
+│     ├─ time.ts                 # computeElapsedMs(), formatElapsed()
 │     ├─ stores/
 │     │  └─ stopwatches.svelte.ts
 │     └─ components/
 │        ├─ StopwatchCard.svelte
 │        └─ FocusView.svelte
+├─ static/
+│  ├─ logo.png                   # Titlebar brand icon
+│  └─ favicon.png
 ├─ src-tauri/
 │  ├─ src/
 │  │  ├─ main.rs
-│  │  ├─ lib.rs                  # builder, setup, window/run events
+│  │  ├─ lib.rs                  # Builder, setup, heartbeat, window/run events
 │  │  ├─ models.rs               # Stopwatch, StopwatchDto
-│  │  ├─ stopwatch.rs            # logika murni (start/pause/reset/elapsed)
-│  │  ├─ db.rs                   # open, migrate, query
-│  │  ├─ commands.rs
-│  │  ├─ focus.rs                # enter/exit focus mode
-│  │  └─ error.rs
-│  ├─ capabilities/default.json  # cukup core:default
+│  │  ├─ stopwatch.rs            # Pure timing logic (start/pause/reset/elapsed)
+│  │  ├─ db.rs                   # Open, migrate, query, crash recovery
+│  │  ├─ commands.rs             # Tauri IPC commands
+│  │  ├─ focus.rs                # Enter/exit Focus Mode
+│  │  └─ error.rs                # AppError enum
+│  ├─ capabilities/default.json  # Minimal permissions + custom titlebar controls
+│  ├─ icons/                     # Generated from assets/Logo.png
 │  ├─ tauri.conf.json
 │  └─ Cargo.toml
 ├─ package.json
 └─ svelte.config.js              # adapter-static, fallback: 'index.html'
 ```
-
-> Seluruh manipulasi window dilakukan **dari Rust**, sehingga frontend tidak perlu izin `window:*` tambahan. Capability tetap minimal.
 
 ---
 
@@ -272,18 +279,16 @@ multi-stopwatch/
 CREATE TABLE stopwatches (
     id             INTEGER PRIMARY KEY AUTOINCREMENT,
     name           TEXT    NOT NULL,
-    accumulated_ms INTEGER NOT NULL DEFAULT 0,   -- waktu terkumpul saat tidak berjalan
-    started_at_ms  INTEGER,                      -- unix ms; NULL = tidak berjalan
-    heartbeat_ms   INTEGER,                      -- terakhir terlihat hidup (untuk recovery)
-    position       INTEGER NOT NULL,             -- urutan tampil
+    accumulated_ms INTEGER NOT NULL DEFAULT 0,   -- accumulated time while not running
+    started_at_ms  INTEGER,                      -- unix ms; NULL = not running
+    heartbeat_ms   INTEGER,                      -- last seen alive (for crash recovery)
+    position       INTEGER NOT NULL,             -- display order
     created_at_ms  INTEGER NOT NULL,
     updated_at_ms  INTEGER NOT NULL
 );
 ```
 
-Satu tabel sudah cukup untuk MVP. Tidak ada tabel pengaturan.
-
-### Logika inti (fungsi murni agar mudah di-test)
+### Core Logic (pure functions for testability)
 
 ```rust
 pub fn elapsed_ms(sw: &Stopwatch, now_ms: i64) -> i64 {
@@ -311,9 +316,7 @@ pub fn reset(sw: &mut Stopwatch) {
 }
 ```
 
-Parameter `now_ms` dioper dari luar supaya logika bisa di-unit-test tanpa menunggu waktu nyata.
-
-### DTO ke frontend
+### Frontend DTO
 
 ```ts
 type StopwatchDto = {
@@ -328,213 +331,201 @@ type StopwatchDto = {
 
 ---
 
-## 9. Kontrak Command (IPC)
+## 9. IPC Command Contract
 
-Semua command mengembalikan `Result<T, String>`. Error ditampilkan frontend sebagai toast.
+All commands return `Result<T, String>`. Errors are displayed in the UI error banner.
 
-| Command | Argumen | Return | Keterangan |
+| Command | Arguments | Return | Notes |
 |---|---|---|---|
-| `list_stopwatches` | — | `StopwatchDto[]` | Diurutkan berdasarkan `position`. |
-| `create_stopwatch` | `name?: string` | `StopwatchDto` | Nama default "Stopwatch N". |
-| `rename_stopwatch` | `id, name` | `StopwatchDto` | Validasi 1–50 karakter. |
+| `list_stopwatches` | — | `StopwatchDto[]` | Ordered by `position`. |
+| `create_stopwatch` | `name?: string` | `StopwatchDto` | Defaults to `"Stopwatch N"`. |
+| `rename_stopwatch` | `id, name` | `StopwatchDto` | Validated 1–50 characters. |
 | `start_stopwatch` | `id` | `StopwatchDto` | Idempotent. |
 | `pause_stopwatch` | `id` | `StopwatchDto` | Idempotent. |
-| `reset_stopwatch` | `id` | `StopwatchDto` | Menghentikan dan mengosongkan. |
+| `reset_stopwatch` | `id` | `StopwatchDto` | Stops and clears elapsed time. |
 | `delete_stopwatch` | `id` | `()` | |
-| `enter_focus_mode` | `id` | `()` | Mengubah window (lihat 5.4). |
-| `exit_focus_mode` | — | `()` | Mengembalikan window. |
+| `enter_focus_mode` | `id` | `()` | Resizes & pins window (see 5.4). |
+| `exit_focus_mode` | — | `()` | Restores window geometry. |
 
-Hook di sisi Rust (bukan command):
+Rust lifecycle hooks (non-command):
 
-- `on_window_event(CloseRequested)` dan `RunEvent::Exit` memanggil `pause_all_running()`.
-- Thread heartbeat memperbarui `heartbeat_ms` setiap ±15 detik jika ada yang running.
-- Startup menjalankan migrasi, lalu recovery crash (F-12).
+- `on_window_event(CloseRequested)` and `RunEvent::Exit` call `pause_all_on_exit()`.
+- Heartbeat thread updates `heartbeat_ms` every ±15 seconds while any stopwatch is running.
+- Startup runs DB migrations, then `recover_crashed_running()` (F-12).
 
 ---
 
-## 10. Spesifikasi UI
+## 10. UI Specification
 
-### Jendela utama
+### Main Window
 
-Ukuran awal 480 × 640 px, ukuran minimum 360 × 400 px.
+Initial size `480 × 640 px`, minimum size `360 × 400 px`, `decorations: false`.
 
 ```
 ┌──────────────────────────────────────────────┐
-│  Multi Stopwatch                  [ + Baru ] │
+│  [Logo] Lowatch                     ─  □  ✕  │
+│  [ Stopwatch name (optional)... ]  [ + New ] │
 ├──────────────────────────────────────────────┤
-│ ┌──────────────────────────────────────────┐ │
-│ │ ✎ Belajar Rust                      [🗑]  │ │
-│ │                                          │ │
-│ │        01 : 23 : 45 .6                   │ │
-│ │                                          │ │
-│ │  [ ⏸ Pause ]   [ ↺ Reset ]   [ ⛶ Focus ] │ │
-│ └──────────────────────────────────────────┘ │
-│ ┌──────────────────────────────────────────┐ │
-│ │ ✎ Meeting                           [🗑]  │ │
-│ │        00 : 12 : 03 .0   (paused)        │ │
-│ │  [ ▶ Resume ]  [ ↺ Reset ]   [ ⛶ Focus ] │ │
-│ └──────────────────────────────────────────┘ │
+│ ┌───────────────────┐  ┌───────────────────┐ │
+│ │ READY             │  │ RUNNING           │ │
+│ │ Study Rust     ✎  │  │ Meeting        ✎  │ │
+│ │    01:23:45.6     │  │    00:12:03.0     │ │
+│ │ [Pause][Rst][Fcs] │  │ [Resume][Rst][Fcs]│ │
+│ └───────────────────┘  └───────────────────┘ │
 └──────────────────────────────────────────────┘
 ```
 
-- **Empty state:** pesan singkat "Belum ada stopwatch" dan tombol "+ Buat stopwatch".
-- Stopwatch yang sedang running diberi penanda visual (misalnya titik/aksen warna) agar mudah dibedakan dari yang paused.
-- Nama diedit inline: klik ikon ✎ atau double-click nama, `Enter` menyimpan, `Esc` membatalkan.
-- Angka waktu memakai `font-variant-numeric: tabular-nums` agar lebar tidak bergoyang saat berubah.
-- Hapus dan Reset (jika waktu > 0) meminta konfirmasi sederhana.
+- **Header & Theme:** Uses a custom integrated titlebar (`decorations: false`) with the Lowatch logo and single app title aligned with Minimize, Maximize/Restore, and Close buttons. Header and body share the same `#202020` background color (inspired by Windows Clock).
+- **Grid Layout:** Stopwatches are displayed in a responsive CSS Grid (`grid-template-columns: repeat(auto-fill, minmax(210px, 1fr))`).
+- **Empty state:** Displays `"No stopwatches yet"` with a `"+ Create stopwatch"` button.
+- **Status indicators:** Running, paused, and ready states are visually distinguished (`RUNNING`, `PAUSED`, `READY`).
+- **Inline rename:** Click `✎` or double-click the stopwatch name; `Enter` saves, `Esc` cancels.
+- **Tabular numbers:** Time displays use `font-variant-numeric: tabular-nums` to prevent horizontal jitter.
+- **Confirmations:** Delete and Reset (when elapsed time > 0) prompt an inline confirmation.
 
 ### Focus Mode
 
 ```
 ┌──────────────────────────────┐
-│ Belajar Rust            [✕]  │   ← seluruh area bisa di-drag
-│ 01:23:45             [ ⏸ ]   │
+│ Study Rust              [✕]  │   ← entire widget is draggable
+│ 01:23:45           [ Pause ] │
 └──────────────────────────────┘
-        280 × 96 px, pojok kanan atas layar
+        280 × 96 px, top-right of screen
 ```
 
-- Tanpa title bar bawaan OS, always-on-top.
-- `[✕]` (atau `Esc`) keluar dari Focus Mode, bukan menutup aplikasi.
-- Tombol Pause/Resume besar dan mudah diklik.
+- Frameless, always-on-top (`decorations: false`).
+- `[✕]` (or `Esc`) exits Focus Mode without closing the app.
 
 ---
 
-## 11. Requirement Non-Fungsional
+## 11. Non-Functional Requirements
 
 | Area | Target |
 |---|---|
-| **Akurasi** | Selisih waktu hanya bergantung pada jam sistem; tidak ada drift akumulatif dari ticker UI. |
-| **Ketahanan data** | Tidak ada kehilangan data pada penutupan normal. Pada crash, kehilangan maksimal ±15 detik waktu running. Waktu paused tidak pernah hilang. |
-| **Performa** | Startup < 1 detik pada mesin umum. Idle CPU mendekati 0% saat tidak ada stopwatch running; ringan saat ada yang running. |
-| **Ukuran** | Installer di kisaran beberapa MB (khas Tauri). |
-| **Privasi** | Semua data lokal. Tidak ada jaringan, telemetri, atau akun. |
-| **Keamanan** | Capability Tauri minimal (`core:default`). Tidak ada akses filesystem/shell dari frontend. SQL hanya dari Rust dengan parameterized query. |
-| **Aksesibilitas** | Tombol punya label teks/`aria-label`, kontras cukup, bisa dioperasikan dengan keyboard (Tab/Enter/Esc). |
+| **Accuracy** | Elapsed time depends solely on system timestamps; no cumulative UI ticker drift. |
+| **Data durability** | Zero data loss on normal close. On crash, max ±15 seconds loss for running stopwatches; paused time is never lost. |
+| **Performance** | Startup < 1s on typical hardware. Near-0% idle CPU when no stopwatch is running. |
+| **Size** | Installer in the few-MB range (typical for Tauri). |
+| **Privacy** | 100% local data. No network requests, telemetry, or accounts. |
+| **Security** | Minimal Tauri capabilities (`core:default` + custom titlebar window controls). No filesystem/shell access from frontend. Parameterized SQL in Rust only. |
+| **Accessibility** | Descriptive labels / `aria-label` attributes, high contrast, keyboard operable (`Tab`/`Enter`/`Esc`). |
 
 ---
 
-## 12. Edge Case
+## 12. Edge Cases
 
-| Kasus | Perilaku |
+| Case | Behavior |
 |---|---|
-| Klik Start dua kali cepat | Aman: command idempotent, waktu tidak ter-reset atau berlipat. |
-| Komputer sleep/hibernate saat stopwatch running | Waktu tetap dihitung berdasarkan jam dinding (seperti stopwatch pada umumnya). Didokumentasikan sebagai perilaku yang diketahui. |
-| Pengguna mengubah jam sistem saat running | Dapat memengaruhi hasil. `(now - started_at).max(0)` mencegah nilai negatif. Dianggap di luar cakupan MVP. |
-| Dua instance aplikasi dibuka | Instance kedua tidak membuka jendela baru; jendela pertama difokuskan (F-13). |
-| File database tidak ada | Dibuat otomatis beserta skema. |
-| File database korup/tidak bisa dibuka | Tampilkan dialog error yang jelas. Jangan menimpa file secara diam-diam. |
-| Penghapusan stopwatch yang sedang di-focus | Tidak mungkin, karena tombol hapus tidak tersedia di Focus Mode. |
-| Monitor di kanan atas berbeda DPI / layout multi-monitor | Posisi dihitung dari work area monitor saat ini memakai satuan logical. |
-| Aplikasi ditutup saat Focus Mode | Semua yang running di-pause dan disimpan. Pembukaan berikutnya selalu di mode normal. |
-| Nama sangat panjang | Dibatasi 50 karakter; UI memotong dengan ellipsis. |
+| Rapid double-click on Start | Safe: command is idempotent; time does not reset or double-count. |
+| Computer sleep/hibernate while running | Time continues based on wall clock (standard stopwatch behavior). |
+| System clock adjusted while running | `(now - started_at).max(0)` prevents negative deltas. |
+| Opening a second app instance | Second instance focuses the existing window (F-13). |
+| Missing database file | Created automatically with schema migration. |
+| Corrupted/unreadable database file | Clear error shown; original file is never silently overwritten. |
+| Deleting a stopwatch while in Focus Mode | Not possible, as Delete is not exposed in Focus Mode. |
+| Multi-monitor with mixed DPI scaling | Top-right position computed from current monitor's work area and scale factor. |
+| App closed while in Focus Mode | Running stopwatches are paused and saved; next launch starts in normal mode. |
+| Very long stopwatch name | Capped at 50 characters; truncated with ellipsis in the UI. |
 
 ---
 
-## 13. Pertanyaan Terbuka dan Asumsi
+## 13. Open Questions and Assumptions
 
-| # | Pertanyaan | Default yang dipakai |
+| # | Question | Default Used |
 |---|---|---|
-| 1 | OS target utama? | Windows 10/11. macOS dan Linux (X11) dikompilasi, tetapi dukungan Focus Mode best-effort. |
-| 2 | Stopwatch yang running saat aplikasi ditutup: lanjut hitung atau di-pause? | **Di-pause** saat penutupan. Alternatif: tetap menghitung berdasarkan jam dinding sehingga waktu saat aplikasi mati ikut terhitung (cukup dengan tidak memanggil `pause_all_running` saat exit). Bisa dijadikan opsi pengaturan di versi berikutnya. |
-| 3 | Perlu system tray agar app tetap hidup saat jendela ditutup? | Tidak untuk MVP. Close = quit. |
-| 4 | Apakah Focus Mode perlu menampilkan lebih dari satu stopwatch? | Tidak. MVP menampilkan satu stopwatch. Beralih antar-stopwatch (prev/next) bisa jadi P2. |
-| 5 | Nama dan ikon aplikasi final? | "Multi Stopwatch" dan ikon default Tauri untuk sementara. |
+| 1 | Primary target OS? | Windows 10/11. macOS and Linux (X11) compile, with best-effort Focus Mode support. |
+| 2 | Running stopwatches on close: keep counting or pause? | **Pause** on close. Keeping wall-clock counting across restarts can be added as a setting in a future version. |
+| 3 | System tray to keep app alive on close? | No for MVP. Close = quit. |
+| 4 | Multiple stopwatches in Focus Mode? | No. MVP shows one stopwatch; switching (prev/next) is a P2 candidate. |
+| 5 | Final app name and icon? | `"Lowatch"` and icon generated from `assets/Logo.png`. |
 
 ---
 
-## 14. Rencana Pengujian
+## 14. Test Plan
 
-### Unit test (Rust, `stopwatch.rs`)
+### Unit & Integration Tests (Rust)
 
-- `elapsed` pada idle, running, dan paused.
-- Start → pause → start → pause: waktu terakumulasi dengan benar.
-- Start ganda dan pause ganda bersifat no-op.
-- Reset dari running dan dari paused.
-- `now < started_at` tidak menghasilkan nilai negatif.
-- Recovery crash: `accumulated += heartbeat - started_at`.
+- `stopwatch.rs`: elapsed in idle/running/paused, multi-cycle start/pause accumulation, idempotent double start/pause, reset from running/paused, negative clock-skew guard, crash recovery via `heartbeat_ms`.
+- `db.rs`: `PRAGMA user_version` migration, CRUD lifecycle, default numbering after deletions, start/pause/reset persistence, `pause_all_running` transaction, corrupted DB preservation, persistence across reopen.
+- `commands.rs`: full CRUD and start/pause/reset command flows.
+- `focus.rs`: top-right position math across 100%/125%/150%/200% DPI, multi-monitor positive/negative offsets, invalid scale fallback, geometry preservation.
+- `lib.rs`: idempotent `pause_all_on_exit`, heartbeat tick + startup crash recovery flow.
 
-### Integration test (Rust, `db.rs`)
+### Manual Verification Checklist
 
-- Migrasi dari database kosong menghasilkan `user_version = 1`.
-- Create → list → rename → delete.
-- `pause_all_running` dalam satu transaksi.
-- Data tetap ada setelah koneksi ditutup dan dibuka ulang (memakai file temp).
-
-### Checklist uji manual
-
-- [ ] Buat 3 stopwatch, jalankan 2 sekaligus; waktunya independen.
-- [ ] Pause stopwatch A, tutup aplikasi, buka lagi: A masih di-pause dengan waktu yang sama.
-- [ ] Biarkan stopwatch B running, tutup aplikasi: B tersimpan dalam keadaan paused.
-- [ ] Matikan proses lewat Task Manager saat ada yang running, buka lagi: waktu pulih dengan selisih ≤ 15 detik.
-- [ ] Masuk Focus Mode: widget di kanan atas, selalu di atas jendela lain, bisa di-drag.
-- [ ] Keluar Focus Mode: ukuran dan posisi kembali seperti semula.
-- [ ] Focus Mode dengan monitor ganda dan scaling DPI berbeda.
-- [ ] Minimize jendela 10 menit saat running: waktu tetap benar setelah dibuka kembali.
-- [ ] Buka aplikasi dua kali: hanya satu jendela.
+- [ ] Create 3 stopwatches, run 2 simultaneously; verify independent timing.
+- [ ] Pause stopwatch A, close app, reopen: A remains paused with the exact same time.
+- [ ] Leave stopwatch B running, close app: B is saved in paused state.
+- [ ] Kill process via Task Manager while running, reopen: time recovers within ≤ 15 seconds.
+- [ ] Enter Focus Mode: widget appears at top-right, stays always-on-top, and is draggable.
+- [ ] Exit Focus Mode: normal window size and position are restored.
+- [ ] Test Focus Mode on multi-monitor setups with different DPI scaling.
+- [ ] Minimize window for 10 minutes while running: time remains accurate upon restore.
+- [ ] Launch app twice: only one window opens.
 
 ---
 
-## 15. Acceptance Criteria MVP
+## 15. MVP Acceptance Criteria
 
-MVP dianggap selesai jika:
+MVP is complete when:
 
-1. Semua requirement **P0** terpenuhi.
-2. Skenario *"pause → tutup aplikasi → buka lagi"* selalu mempertahankan waktu persis.
-3. Focus Mode menempatkan widget di kanan atas layar, always-on-top, dan bisa dikembalikan ke mode normal tanpa mengubah ukuran/posisi semula.
-4. Seluruh unit/integration test pada bagian 14 lulus.
-5. Build installer berhasil untuk Windows (`npm run tauri build`) dan bisa dipasang serta dijalankan pada mesin bersih.
+1. All **P0** requirements are implemented.
+2. *"Pause → close app → reopen"* always preserves exact elapsed time.
+3. Focus Mode pins the widget to the top-right corner, always-on-top, and restores normal geometry on exit.
+4. All Rust unit and integration tests pass.
+5. Windows installer builds cleanly (`pnpm tauri build`) and runs on a clean machine.
 
 ---
 
-## 16. Milestone
+## 16. Milestones
 
-| Milestone | Isi | Hasil |
+| Milestone | Scope | Outcome |
 |---|---|---|
-| **M0 — Scaffold** | `create-tauri-app` (SvelteKit + TS), adapter-static, `ssr = false`, struktur folder. | App kosong berjalan di `tauri dev`. |
-| **M1 — Core Rust** | `stopwatch.rs` + unit test, `db.rs` + migrasi, semua command CRUD/start/pause/reset. | Logika lengkap, teruji tanpa UI. |
-| **M2 — UI utama** | Store, ticker global, `StopwatchCard`, inline rename, empty state, konfirmasi. | Fitur inti bisa dipakai. |
-| **M3 — Persistensi** | Hook close/exit, heartbeat, recovery crash, single-instance. | Waktu aman saat app ditutup atau crash. |
-| **M4 — Focus Mode** | `focus.rs`, `FocusView`, drag region, `Esc`, penyimpanan geometri. | Widget kanan atas berfungsi. |
-| **M5 — Polish & rilis** | Ikon, uji manual lintas monitor/DPI, perbaikan bug, build installer. | Installer siap dipakai. |
+| **M0 — Scaffold** | Tauri 2 + SvelteKit + TS, `adapter-static`, `ssr = false`. | Empty app runs in `tauri dev`. |
+| **M1 — Core Rust** | `stopwatch.rs` + tests, `db.rs` + migrations, IPC commands. | Core logic tested without UI. |
+| **M2 — Main UI** | Store, global ticker, `StopwatchCard`, grid layout, inline rename, confirmations. | Core features usable in UI. |
+| **M3 — Persistence** | Close/exit hooks, heartbeat thread, crash recovery, single-instance. | Time safe across close and crash. |
+| **M4 — Focus Mode** | `focus.rs`, `FocusView`, drag region, `Esc`, geometry restore. | Top-right widget functional. |
+| **M5 — Polish & Release** | Lowatch branding & icon, custom frameless titlebar, English UI, build. | Release-ready app. |
 
 ---
 
-## 17. Risiko dan Mitigasi
+## 17. Risks and Mitigations
 
-| Risiko | Dampak | Mitigasi |
+| Risk | Impact | Mitigation |
 |---|---|---|
-| Linux Wayland tidak mendukung `set_position` dan always-on-top secara andal | Focus Mode tidak presisi di Linux | Windows adalah target utama. Di Linux sebutkan sebagai keterbatasan atau sarankan sesi X11. |
-| Plugin `window-state` (jika dipakai di P2) bentrok dengan geometri Focus Mode | Ukuran widget ikut tersimpan | Nonaktifkan penyimpanan state selama Focus Mode, atau simpan geometri sendiri. |
-| Urutan operasi window (resize, resizable, decorations) berbeda antar-OS | Ukuran/posisi widget tidak sesuai | Bungkus di `focus.rs` dan uji di tiap OS target. |
-| Perubahan jam sistem memengaruhi stopwatch running | Hasil waktu keliru | Clamp nilai negatif. Jika perlu nanti, tambahkan `Instant` monotonic untuk sesi berjalan. |
-| WebView di-throttle saat tersembunyi | Tampilan tertunda | Tidak memengaruhi nilai waktu karena dihitung dari timestamp. Tampilan akan sinkron kembali saat tick berikutnya. |
-| Over-engineering seiring berjalannya proyek | Waktu pengerjaan membengkak | Pegang daftar Non-Goals. Fitur baru masuk lewat revisi PRD. |
+| Linux Wayland lacks reliable `set_position` / always-on-top | Focus Mode imprecise on Wayland | Windows is primary target; document X11 recommendation on Linux. |
+| Window-state plugin (if added in P2) conflicts with Focus Mode | Widget size saved as normal size | Disable state saving during Focus Mode or manage geometry manually. |
+| Window operation ordering differs across OSes | Wrong widget size/position | Encapsulate in `focus.rs` and test on target OSes. |
+| System clock changes affect running stopwatches | Incorrect delta | Clamp negative values; optionally switch to monotonic `Instant` for active sessions later. |
+| WebView throttled while hidden | Delayed visual refresh | No impact on accuracy (timestamp-based); UI catches up on next tick. |
+| Over-engineering | Scope creep | Stick to Non-Goals; new features require a PRD revision. |
 
 ---
 
-## 18. Dependensi Utama
+## 18. Core Dependencies
 
-**Rust (`Cargo.toml`)**
+**Rust (`src-tauri/Cargo.toml`)**
 
 ```toml
 tauri = { version = "2" }
-tauri-plugin-single-instance = "2"          # P1
-rusqlite = { version = "*", features = ["bundled"] }  # pakai versi stabil terbaru
+tauri-plugin-single-instance = "2"
+rusqlite = { version = "0.32", features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-thiserror = "1"
+thiserror = "2"
 ```
 
 **Frontend (`package.json`)**
 
 ```
-svelte (v5), @sveltejs/kit, @sveltejs/adapter-static,
-vite, typescript, @tauri-apps/api (v2), @tauri-apps/cli (v2)
+svelte (^5), @sveltejs/kit (^2), @sveltejs/adapter-static (^3),
+vite (^8), typescript (~6), @tauri-apps/api (^2), @tauri-apps/cli (^2)
 ```
 
-**`tauri.conf.json` (poin penting)**
+**`src-tauri/tauri.conf.json` highlights**
 
-- `build.frontendDist = "../build"`, `build.devUrl = "http://localhost:5173"`
+- `productName`: `"Lowatch"`, `identifier`: `"com.xuerns.lowatch"`
+- `build.frontendDist = "../build"`, `build.devUrl = "http://localhost:1420"`
 - `build.beforeDevCommand = "npm run dev"`, `build.beforeBuildCommand = "npm run build"`
-- Jendela utama: 480 × 640, `minWidth` 360, `minHeight` 400
-- `identifier` unik, misalnya `com.example.multistopwatch`
+- Main window: `480 × 640`, `minWidth: 360`, `minHeight: 400`, `decorations: false`

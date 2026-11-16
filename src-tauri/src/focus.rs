@@ -6,8 +6,8 @@ use crate::error::AppError;
 
 /// Lebar jendela Focus Mode dalam satuan logical pixel (sesuai PRD 5.4 & 10).
 pub const FOCUS_WIDTH_LOGICAL: f64 = 280.0;
-/// Tinggi jendela Focus Mode dalam satuan logical pixel (sesuai PRD 5.4 & 10).
-pub const FOCUS_HEIGHT_LOGICAL: f64 = 96.0;
+/// Tinggi jendela Focus Mode dalam satuan logical pixel (cukup untuk dial stopwatch bulat).
+pub const FOCUS_HEIGHT_LOGICAL: f64 = 240.0;
 /// Margin dari tepi kanan dan atas work area monitor dalam satuan logical pixel (sesuai PRD 5.4).
 pub const FOCUS_MARGIN_LOGICAL: f64 = 16.0;
 
@@ -138,7 +138,7 @@ fn capture_window_geometry(window: &WebviewWindow) -> Result<SavedWindowGeometry
     })
 }
 
-/// Mengubah jendela utama ke Focus Mode (`280 × 96` logical, pojok kanan atas work area, always-on-top, tanpa dekorasi).
+/// Mengubah jendela utama ke Focus Mode (`280 × 240` logical, pojok kanan atas work area, always-on-top, tanpa dekorasi).
 pub fn enter_focus_mode(
     window: &WebviewWindow,
     state: &AppState,
@@ -199,7 +199,7 @@ pub fn exit_focus_mode(window: &WebviewWindow, state: &AppState) -> Result<(), A
             window.maximize()?;
         }
     } else {
-        window.set_decorations(true)?;
+        window.set_decorations(false)?;
         window.set_resizable(true)?;
         window.set_min_size(Some(LogicalSize::new(
             NORMAL_MIN_WIDTH_LOGICAL,

@@ -2,10 +2,12 @@
   import { tick } from "svelte";
   import type { StopwatchDto } from "../api";
   import { computeElapsedMs, formatElapsed } from "../time";
+  import StopwatchDial from "./StopwatchDial.svelte";
 
   interface Props {
     stopwatch: StopwatchDto;
     nowMs: number;
+    editMode?: boolean;
     onStart: (id: number) => Promise<void> | void;
     onPause: (id: number) => Promise<void> | void;
     onReset: (id: number) => Promise<void> | void;
@@ -17,6 +19,7 @@
   let {
     stopwatch,
     nowMs,
+    editMode = false,
     onStart,
     onPause,
     onReset,
@@ -33,14 +36,6 @@
   let elapsedMs = $derived(computeElapsedMs(stopwatch, nowMs));
   let formattedTime = $derived(formatElapsed(elapsedMs, true));
 
-  let statusLabel = $derived(
-    stopwatch.status === "running"
-      ? "BERJALAN"
-      : stopwatch.status === "paused"
-        ? "DIJEDA"
-        : "SIAP"
-  );
-
   let primaryActionLabel = $derived(
     stopwatch.status === "running"
       ? "Pause"
@@ -50,6 +45,15 @@
   );
 
   let isResetDisabled = $derived(elapsedMs === 0 && stopwatch.status === "idle");
+
+  $effect(() => {
+    if (!editMode) {
+      isEditing = false;
+      if (confirmMode === "delete") {
+        confirmMode = "none";
+      }
+    }
+  });
 
   async function beginEditing(): Promise<void> {
     confirmMode = "none";
@@ -134,97 +138,159 @@
 
 <article class="stopwatch-card">
   <header class="card-header">
-    <div class="title-group">
-      <span class="status-label" data-status={stopwatch.status}>
-        {statusLabel}
-      </span>
-
-      {#if isEditing}
-        <div class="rename-row">
-          <input
-            bind:this={nameInputEl}
-            type="text"
-            class="rename-input"
-            maxlength="50"
-            bind:value={draftName}
-            onkeydown={handleEditKeydown}
-            aria-label="Ubah nama stopwatch"
-          />
-          <button
-            type="button"
-            class="btn-inline"
-            onclick={submitRename}
-            title="Simpan nama (Enter)"
+    {#if isEditing}
+      <div class="rename-row">
+        <input
+          bind:this={nameInputEl}
+          type="text"
+          class="rename-input"
+          maxlength="50"
+          bind:value={draftName}
+          onkeydown={handleEditKeydown}
+          aria-label="Rename stopwatch"
+        />
+        <button
+          type="button"
+          class="btn-inline btn-inline-save"
+          onclick={submitRename}
+          aria-label="Save name"
+          title="Save (Enter)"
+        >
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
           >
-            Simpan
-          </button>
-          <button
-            type="button"
-            class="btn-inline btn-muted"
-            onclick={cancelEditing}
-            title="Batal (Esc)"
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          class="btn-inline"
+          onclick={cancelEditing}
+          aria-label="Cancel rename"
+          title="Cancel (Esc)"
+        >
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
           >
-            Batal
-          </button>
-        </div>
-      {:else}
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
+      </div>
+    {:else}
+      <div class="header-row">
         <div class="name-row">
           <h2
             class="stopwatch-name"
-            ondblclick={beginEditing}
-            title="Klik dua kali untuk mengubah nama"
+            ondblclick={() => {
+              if (editMode) void beginEditing();
+            }}
+            title={editMode ? "Double-click to rename" : stopwatch.name}
           >
             {stopwatch.name}
           </h2>
+          {#if editMode}
+            <button
+              type="button"
+              class="btn-icon-ghost"
+              onclick={beginEditing}
+              aria-label="Rename stopwatch {stopwatch.name}"
+              title="Rename"
+            >
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M12 20h9" />
+                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" />
+              </svg>
+            </button>
+          {/if}
+        </div>
+
+        {#if editMode}
           <button
             type="button"
-            class="btn-ghost"
-            onclick={beginEditing}
-            aria-label="Ubah nama stopwatch {stopwatch.name}"
+            class="btn-icon-ghost btn-delete-trigger"
+            onclick={requestDelete}
+            aria-label="Delete stopwatch {stopwatch.name}"
+            title="Delete"
           >
-            Ubah Nama
+            <svg
+              width="15"
+              height="15"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <polyline points="3 6 5 6 21 6" />
+              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+              <path d="M10 11v6" />
+              <path d="M14 11v6" />
+              <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+            </svg>
           </button>
-        </div>
-      {/if}
-    </div>
-
-    <button
-      type="button"
-      class="btn-ghost btn-delete-trigger"
-      onclick={requestDelete}
-      aria-label="Hapus stopwatch {stopwatch.name}"
-    >
-      Hapus
-    </button>
+        {/if}
+      </div>
+    {/if}
   </header>
 
-  <div class="time-display" data-status={stopwatch.status}>
-    <span class="time-main"
-      >{formattedTime.hours}:{formattedTime.minutes}:{formattedTime.seconds}</span
-    ><span class="time-tenths">.{formattedTime.tenths}</span>
-  </div>
+  <StopwatchDial status={stopwatch.status} {elapsedMs} size={208}>
+    <div class="time-display" data-status={stopwatch.status}>
+      <span class="time-main"
+        >{formattedTime.hours}:{formattedTime.minutes}:{formattedTime.seconds}</span
+      ><span class="time-tenths">.{formattedTime.tenths}</span>
+    </div>
+  </StopwatchDial>
 
   {#if confirmMode === "reset"}
-    <div class="confirm-bar" role="region" aria-label="Konfirmasi reset stopwatch">
-      <span class="confirm-text">Reset waktu ke 00:00:00?</span>
+    <div class="confirm-bar" role="region" aria-label="Confirm reset stopwatch">
+      <span class="confirm-text">Reset time to 00:00:00?</span>
       <div class="confirm-actions">
         <button type="button" class="btn-confirm-danger" onclick={confirmReset}>
-          Ya, Reset
+          Yes, Reset
         </button>
-        <button type="button" class="btn-secondary" onclick={cancelConfirm}>
-          Batal
+        <button type="button" class="btn-confirm-cancel" onclick={cancelConfirm}>
+          Cancel
         </button>
       </div>
     </div>
   {:else if confirmMode === "delete"}
-    <div class="confirm-bar" role="region" aria-label="Konfirmasi hapus stopwatch">
-      <span class="confirm-text">Hapus stopwatch ini?</span>
+    <div class="confirm-bar" role="region" aria-label="Confirm delete stopwatch">
+      <span class="confirm-text">Delete this stopwatch?</span>
       <div class="confirm-actions">
         <button type="button" class="btn-confirm-danger" onclick={confirmDelete}>
-          Ya, Hapus
+          Yes, Delete
         </button>
-        <button type="button" class="btn-secondary" onclick={cancelConfirm}>
-          Batal
+        <button type="button" class="btn-confirm-cancel" onclick={cancelConfirm}>
+          Cancel
         </button>
       </div>
     </div>
@@ -232,29 +298,69 @@
     <div class="controls-row">
       <button
         type="button"
-        class="btn-primary"
+        class="btn-circle-primary"
         data-status={stopwatch.status}
         onclick={handlePrimaryAction}
+        aria-label="{primaryActionLabel} stopwatch {stopwatch.name}"
+        title={primaryActionLabel}
       >
-        {primaryActionLabel}
+        {#if stopwatch.status === "running"}
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <rect x="6" y="4" width="4" height="16" rx="1" />
+            <rect x="14" y="4" width="4" height="16" rx="1" />
+          </svg>
+        {:else}
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <polygon points="7 4 20 12 7 20 7 4" />
+          </svg>
+        {/if}
       </button>
 
       <button
         type="button"
-        class="btn-secondary"
+        class="btn-circle-secondary"
         disabled={isResetDisabled}
         onclick={handleResetClick}
+        aria-label="Reset stopwatch {stopwatch.name}"
+        title="Reset"
       >
-        Reset
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
+          <path d="M3 3v5h5" />
+        </svg>
       </button>
 
       <button
         type="button"
-        class="btn-secondary"
+        class="btn-circle-secondary"
         onclick={handleFocusClick}
-        aria-label="Mode fokus untuk {stopwatch.name}"
+        aria-label="Focus mode for {stopwatch.name}"
+        title="Focus mode"
       >
-        Focus
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <rect x="3" y="3" width="18" height="18" rx="2" />
+          <rect x="12" y="4" width="8" height="6" rx="1" fill="currentColor" stroke="none" />
+        </svg>
       </button>
     </div>
   {/if}
@@ -262,58 +368,44 @@
 
 <style>
   .stopwatch-card {
-    background-color: #111111;
-    border: 1px solid #262626;
-    border-radius: 8px;
-    padding: 14px 16px;
+    background-color: #2b2b2b;
+    border: 1px solid #383838;
+    border-radius: 10px;
+    padding: 14px 18px 20px;
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    justify-content: space-between;
+    gap: 18px;
+    min-width: 0;
   }
 
   .card-header {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
+    min-width: 0;
+    min-height: 32px;
+  }
+
+  .header-row {
+    display: flex;
+    align-items: center;
     justify-content: space-between;
     gap: 8px;
-  }
-
-  .title-group {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
+    width: 100%;
     min-width: 0;
-    flex: 1;
-  }
-
-  .status-label {
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-    font-size: 0.6875rem;
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: #737373;
-    line-height: 1.2;
-  }
-
-  .status-label[data-status="running"] {
-    color: #10b981;
-  }
-
-  .status-label[data-status="paused"] {
-    color: #d97706;
   }
 
   .name-row {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 4px;
     min-width: 0;
+    flex: 1;
   }
 
   .stopwatch-name {
     margin: 0;
-    font-size: 0.9375rem;
+    font-size: 1.0625rem;
     font-weight: 600;
     color: #f5f5f5;
     white-space: nowrap;
@@ -321,6 +413,7 @@
     text-overflow: ellipsis;
     cursor: pointer;
     user-select: none;
+    min-width: 0;
   }
 
   .rename-row {
@@ -328,36 +421,41 @@
     align-items: center;
     gap: 6px;
     width: 100%;
+    min-width: 0;
+    min-height: 32px;
   }
 
   .rename-input {
     flex: 1;
     min-width: 0;
-    background-color: #171717;
+    width: 100%;
+    background-color: #202020;
     color: #f5f5f5;
-    border: 1px solid #262626;
+    border: 1px solid #525252;
     border-radius: 6px;
-    padding: 4px 8px;
-    font-size: 0.875rem;
+    padding: 6px 10px;
+    font-size: 0.9375rem;
     font-family: inherit;
     outline: none;
     transition: border-color 120ms ease;
   }
 
   .rename-input:focus-visible {
-    border-color: #525252;
+    border-color: #a3a3a3;
   }
 
   .time-display {
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
     font-variant-numeric: tabular-nums;
     font-feature-settings: "tnum" 1;
-    font-size: 2rem;
+    font-size: 1.625rem;
     font-weight: 700;
     line-height: 1.15;
     letter-spacing: -0.02em;
     color: #a3a3a3;
     user-select: none;
+    white-space: nowrap;
+    text-align: center;
   }
 
   .time-display[data-status="running"] {
@@ -369,26 +467,24 @@
   }
 
   .time-tenths {
-    font-size: 1.25rem;
+    font-size: 1.05rem;
     font-weight: 500;
-    color: #737373;
+    color: #8a8a8a;
   }
 
   .time-display[data-status="running"] .time-tenths {
-    color: #a3a3a3;
+    color: #b3b3b3;
   }
 
   .controls-row {
     display: flex;
     align-items: center;
-    gap: 8px;
+    justify-content: center;
+    gap: 10px;
   }
 
   button {
     font-family: inherit;
-    font-size: 0.8125rem;
-    font-weight: 500;
-    border-radius: 6px;
     cursor: pointer;
     transition:
       background-color 120ms ease,
@@ -397,61 +493,77 @@
   }
 
   button:disabled {
-    opacity: 0.4;
+    opacity: 0.35;
     cursor: not-allowed;
   }
 
-  .btn-primary {
-    flex: 1;
+  .btn-circle-primary {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
     background-color: #f5f5f5;
-    color: #0a0a0a;
+    color: #202020;
     border: 1px solid #f5f5f5;
-    padding: 7px 12px;
-    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    flex-shrink: 0;
   }
 
-  .btn-primary:hover:not(:disabled) {
+  .btn-circle-primary:hover:not(:disabled) {
     background-color: #e5e5e5;
     border-color: #e5e5e5;
   }
 
-  .btn-primary[data-status="running"] {
-    background-color: #171717;
+  .btn-circle-primary[data-status="running"] {
+    background-color: #363636;
     color: #f5f5f5;
+    border: 1px solid #525252;
+  }
+
+  .btn-circle-primary[data-status="running"]:hover:not(:disabled) {
+    background-color: #424242;
+    border-color: #666666;
+  }
+
+  .btn-circle-secondary {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background-color: #323232;
+    color: #d4d4d4;
     border: 1px solid #404040;
-  }
-
-  .btn-primary[data-status="running"]:hover:not(:disabled) {
-    background-color: #1f1f1f;
-    border-color: #525252;
-  }
-
-  .btn-secondary {
-    background-color: #171717;
-    color: #a3a3a3;
-    border: 1px solid #262626;
-    padding: 7px 12px;
-  }
-
-  .btn-secondary:hover:not(:disabled) {
-    background-color: #1f1f1f;
-    color: #f5f5f5;
-    border-color: #404040;
-  }
-
-  .btn-ghost {
-    background-color: transparent;
-    color: #737373;
-    border: 1px solid transparent;
-    padding: 2px 6px;
-    font-size: 0.75rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
     flex-shrink: 0;
   }
 
-  .btn-ghost:hover {
-    background-color: #171717;
-    color: #a3a3a3;
-    border-color: #262626;
+  .btn-circle-secondary:hover:not(:disabled) {
+    background-color: #3c3c3c;
+    color: #ffffff;
+    border-color: #525252;
+  }
+
+  .btn-icon-ghost {
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
+    background-color: transparent;
+    color: #8a8a8a;
+    border: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    flex-shrink: 0;
+  }
+
+  .btn-icon-ghost:hover {
+    background-color: transparent;
+    color: #e5e5e5;
   }
 
   .btn-delete-trigger:hover {
@@ -459,32 +571,46 @@
   }
 
   .btn-inline {
-    background-color: #171717;
-    color: #f5f5f5;
-    border: 1px solid #262626;
-    padding: 4px 8px;
-    font-size: 0.75rem;
+    width: 30px;
+    height: 30px;
+    border-radius: 6px;
+    background-color: #323232;
+    color: #d4d4d4;
+    border: 1px solid #404040;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
     flex-shrink: 0;
   }
 
   .btn-inline:hover {
-    background-color: #1f1f1f;
-    border-color: #404040;
+    background-color: #3c3c3c;
+    color: #ffffff;
+    border-color: #525252;
   }
 
-  .btn-muted {
-    color: #a3a3a3;
+  .btn-inline-save {
+    background-color: #f5f5f5;
+    color: #202020;
+    border-color: #f5f5f5;
+  }
+
+  .btn-inline-save:hover {
+    background-color: #e5e5e5;
+    color: #202020;
+    border-color: #e5e5e5;
   }
 
   .confirm-bar {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
+    flex-direction: column;
+    align-items: stretch;
     gap: 8px;
-    background-color: #171717;
-    border: 1px solid #262626;
-    border-radius: 6px;
-    padding: 6px 10px;
+    background-color: #202020;
+    border: 1px solid #383838;
+    border-radius: 8px;
+    padding: 10px 12px;
   }
 
   .confirm-text {
@@ -495,21 +621,38 @@
   .confirm-actions {
     display: flex;
     align-items: center;
-    gap: 6px;
-    flex-shrink: 0;
+    justify-content: flex-end;
+    gap: 8px;
   }
 
   .btn-confirm-danger {
-    background-color: #171717;
+    background-color: #323232;
     color: #f87171;
-    border: 1px solid #262626;
-    padding: 5px 10px;
+    border: 1px solid #404040;
+    border-radius: 6px;
+    padding: 5px 12px;
     font-size: 0.75rem;
     font-weight: 600;
   }
 
   .btn-confirm-danger:hover {
-    background-color: #1f1f1f;
-    border-color: #404040;
+    background-color: #3c3c3c;
+    border-color: #525252;
+  }
+
+  .btn-confirm-cancel {
+    background-color: #323232;
+    color: #d4d4d4;
+    border: 1px solid #404040;
+    border-radius: 6px;
+    padding: 5px 12px;
+    font-size: 0.75rem;
+    font-weight: 500;
+  }
+
+  .btn-confirm-cancel:hover {
+    background-color: #3c3c3c;
+    color: #ffffff;
+    border-color: #525252;
   }
 </style>
