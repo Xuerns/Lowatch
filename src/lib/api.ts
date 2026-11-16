@@ -39,3 +39,11 @@ export async function resetStopwatch(id: number): Promise<StopwatchDto> {
 export async function deleteStopwatch(id: number): Promise<void> {
   return invoke<void>("delete_stopwatch", { id });
 }
+
+export async function enterFocusMode(id: number): Promise<void> {
+  return invoke<void>("enter_focus_mode", { id });
+}
+
+export async function exitFocusMode(): Promise<void> {
+  return invoke<void>("exit_focus_mode");
+}

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import FocusView from "$lib/components/FocusView.svelte";
   import StopwatchCard from "$lib/components/StopwatchCard.svelte";
   import { stopwatchStore } from "$lib/stores/stopwatches.svelte";
 
@@ -11,6 +12,16 @@
     return () => {
       stopwatchStore.destroy();
     };
+  });
+
+  $effect(() => {
+    if (
+      !stopwatchStore.loading &&
+      stopwatchStore.focusedId !== null &&
+      stopwatchStore.focusedStopwatch === null
+    ) {
+      void stopwatchStore.exitFocus();
+    }
   });
 
   async function handleCreateSubmit(event: SubmitEvent): Promise<void> {
@@ -37,85 +48,95 @@
     }
   }
 
-  function handleFocusStopwatch(id: number): void {
-    stopwatchStore.focusedId = id;
+  async function handleFocusStopwatch(id: number): Promise<void> {
+    await stopwatchStore.enterFocus(id);
   }
 </script>
 
-<main class="app-shell">
-  <header class="app-header">
-    <div class="header-top">
-      <h1 class="app-title">Multi Stopwatch</h1>
-      <span class="running-counter">
-        {#if stopwatchStore.runningCount > 0}
-          {stopwatchStore.runningCount} berjalan
-        {:else}
-          {stopwatchStore.items.length} total
-        {/if}
-      </span>
-    </div>
-
-    <form class="create-form" onsubmit={handleCreateSubmit}>
-      <input
-        type="text"
-        class="create-input"
-        maxlength="50"
-        placeholder="Nama stopwatch (opsional)..."
-        bind:value={newName}
-        aria-label="Nama stopwatch baru"
-      />
-      <button type="submit" class="btn-create" disabled={isCreating}>
-        + Baru
-      </button>
-    </form>
-  </header>
-
-  {#if stopwatchStore.errorMessage !== null}
-    <div class="error-banner" role="alert">
-      <span class="error-text">{stopwatchStore.errorMessage}</span>
-      <button
-        type="button"
-        class="btn-dismiss"
-        onclick={() => stopwatchStore.clearError()}
-      >
-        Tutup
-      </button>
-    </div>
-  {/if}
-
-  <section class="stopwatch-list" aria-label="Daftar stopwatch">
-    {#if stopwatchStore.loading && stopwatchStore.items.length === 0}
-      <div class="empty-state">
-        <p class="empty-text">Memuat stopwatch...</p>
+{#if stopwatchStore.focusedStopwatch !== null}
+  <FocusView
+    stopwatch={stopwatchStore.focusedStopwatch}
+    nowMs={stopwatchStore.nowMs}
+    onStart={(id) => stopwatchStore.start(id)}
+    onPause={(id) => stopwatchStore.pause(id)}
+    onExit={() => stopwatchStore.exitFocus()}
+  />
+{:else}
+  <main class="app-shell">
+    <header class="app-header">
+      <div class="header-top">
+        <h1 class="app-title">Multi Stopwatch</h1>
+        <span class="running-counter">
+          {#if stopwatchStore.runningCount > 0}
+            {stopwatchStore.runningCount} berjalan
+          {:else}
+            {stopwatchStore.items.length} total
+          {/if}
+        </span>
       </div>
-    {:else if stopwatchStore.items.length === 0}
-      <div class="empty-state">
-        <p class="empty-text">Belum ada stopwatch</p>
+
+      <form class="create-form" onsubmit={handleCreateSubmit}>
+        <input
+          type="text"
+          class="create-input"
+          maxlength="50"
+          placeholder="Nama stopwatch (opsional)..."
+          bind:value={newName}
+          aria-label="Nama stopwatch baru"
+        />
+        <button type="submit" class="btn-create" disabled={isCreating}>
+          + Baru
+        </button>
+      </form>
+    </header>
+
+    {#if stopwatchStore.errorMessage !== null}
+      <div class="error-banner" role="alert">
+        <span class="error-text">{stopwatchStore.errorMessage}</span>
         <button
           type="button"
-          class="btn-empty-create"
-          disabled={isCreating}
-          onclick={handleQuickCreate}
+          class="btn-dismiss"
+          onclick={() => stopwatchStore.clearError()}
         >
-          + Buat stopwatch
+          Tutup
         </button>
       </div>
-    {:else}
-      {#each stopwatchStore.items as item (item.id)}
-        <StopwatchCard
-          stopwatch={item}
-          nowMs={stopwatchStore.nowMs}
-          onStart={(id) => stopwatchStore.start(id)}
-          onPause={(id) => stopwatchStore.pause(id)}
-          onReset={(id) => stopwatchStore.reset(id)}
-          onRename={(id, name) => stopwatchStore.rename(id, name)}
-          onDelete={(id) => stopwatchStore.remove(id)}
-          onFocus={handleFocusStopwatch}
-        />
-      {/each}
     {/if}
-  </section>
-</main>
+
+    <section class="stopwatch-list" aria-label="Daftar stopwatch">
+      {#if stopwatchStore.loading && stopwatchStore.items.length === 0}
+        <div class="empty-state">
+          <p class="empty-text">Memuat stopwatch...</p>
+        </div>
+      {:else if stopwatchStore.items.length === 0}
+        <div class="empty-state">
+          <p class="empty-text">Belum ada stopwatch</p>
+          <button
+            type="button"
+            class="btn-empty-create"
+            disabled={isCreating}
+            onclick={handleQuickCreate}
+          >
+            + Buat stopwatch
+          </button>
+        </div>
+      {:else}
+        {#each stopwatchStore.items as item (item.id)}
+          <StopwatchCard
+            stopwatch={item}
+            nowMs={stopwatchStore.nowMs}
+            onStart={(id) => stopwatchStore.start(id)}
+            onPause={(id) => stopwatchStore.pause(id)}
+            onReset={(id) => stopwatchStore.reset(id)}
+            onRename={(id, name) => stopwatchStore.rename(id, name)}
+            onDelete={(id) => stopwatchStore.remove(id)}
+            onFocus={handleFocusStopwatch}
+          />
+        {/each}
+      {/if}
+    </section>
+  </main>
+{/if}
 
 <style>
   .app-shell {

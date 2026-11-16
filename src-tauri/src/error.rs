@@ -20,6 +20,11 @@ pub enum AppError {
     #[error("Kesalahan jam sistem: waktu berada sebelum Unix Epoch.")]
     SystemClockError,
 
+    #[error(
+        "Berkas database '{path}' rusak atau tidak dapat dibaca ({reason}). Berkas asli tidak ditimpa demi keamanan data."
+    )]
+    DatabaseCorrupted { path: String, reason: String },
+
     #[error("Kesalahan database: {0}")]
     Database(#[from] rusqlite::Error),
 

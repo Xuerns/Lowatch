@@ -7,6 +7,8 @@ import {
   pauseStopwatch,
   resetStopwatch,
   deleteStopwatch,
+  enterFocusMode,
+  exitFocusMode,
 } from "../api";
 
 class StopwatchStore {
@@ -20,6 +22,11 @@ class StopwatchStore {
 
   hasRunning = $derived(this.items.some((item) => item.status === "running"));
   runningCount = $derived(this.items.filter((item) => item.status === "running").length);
+  focusedStopwatch = $derived(
+    this.focusedId !== null
+      ? (this.items.find((item) => item.id === this.focusedId) ?? null)
+      : null
+  );
 
   /**
    * Mengatur hidup/mati ticker global 100ms.
@@ -135,6 +142,28 @@ class StopwatchStore {
       this.#syncTicker();
     } catch (err) {
       this.setError(err);
+    }
+  }
+
+  async enterFocus(id: number): Promise<boolean> {
+    try {
+      await enterFocusMode(id);
+      this.focusedId = id;
+      this.clearError();
+      return true;
+    } catch (err) {
+      this.setError(err);
+      return false;
+    }
+  }
+
+  async exitFocus(): Promise<void> {
+    try {
+      await exitFocusMode();
+    } catch (err) {
+      this.setError(err);
+    } finally {
+      this.focusedId = null;
     }
   }
 

@@ -72,8 +72,15 @@ pub fn reset_stopwatch_inner(state: &AppState, id: i64) -> Result<StopwatchDto, 
 
 /// Helper internal untuk menghapus stopwatch berdasarkan ID.
 pub fn delete_stopwatch_inner(state: &AppState, id: i64) -> Result<(), AppError> {
-    let conn = state.lock_db()?;
-    db::delete_stopwatch(&conn, id)
+    {
+        let conn = state.lock_db()?;
+        db::delete_stopwatch(&conn, id)?;
+    }
+    let mut focus = state.lock_focus()?;
+    if focus.focused_stopwatch_id == Some(id) {
+        focus.focused_stopwatch_id = None;
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -118,10 +125,25 @@ pub fn delete_stopwatch(state: State<'_, AppState>, id: i64) -> Result<(), Strin
     delete_stopwatch_inner(&state, id).map_err(Into::into)
 }
 
+#[tauri::command]
+pub fn enter_focus_mode(
+    window: tauri::WebviewWindow,
+    state: State<'_, AppState>,
+    id: i64,
+) -> Result<(), String> {
+    crate::focus::enter_focus_mode(&window, &state, id).map_err(Into::into)
+}
+
+#[tauri::command]
+pub fn exit_focus_mode(
+    window: tauri::WebviewWindow,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    crate::focus::exit_focus_mode(&window, &state).map_err(Into::into)
+}
+
 #[cfg(test)]
 mod tests {
-    use std::sync::Mutex;
-
     use super::*;
     use crate::models::StopwatchStatus;
 
@@ -129,7 +151,7 @@ mod tests {
         let dir = tempfile::tempdir().expect("create temp dir");
         let db_path = dir.path().join("test-commands.db");
         let conn = db::init_db(&db_path).expect("init_db should succeed");
-        (dir, AppState { db: Mutex::new(conn) })
+        (dir, AppState::new(conn))
     }
 
     #[test]
@@ -163,7 +185,18 @@ mod tests {
         let long_err = rename_stopwatch_inner(&state, sw1.id, &long_name);
         assert!(matches!(long_err, Err(AppError::NameTooLong(51))));
 
+        // Jika sw1 sedang menjadi fokus, penghapusan sw1 wajib membersihkan focused_stopwatch_id
+        {
+            let mut focus = state.lock_focus().expect("lock focus");
+            focus.focused_stopwatch_id = Some(sw1.id);
+        }
+
         delete_stopwatch_inner(&state, sw1.id).expect("delete sw1");
+        {
+            let focus = state.lock_focus().expect("lock focus after delete");
+            assert_eq!(focus.focused_stopwatch_id, None);
+        }
+
         let after_delete = list_stopwatches_inner(&state).expect("list after delete");
         assert_eq!(after_delete.len(), 1);
         assert_eq!(after_delete[0].id, sw2.id);

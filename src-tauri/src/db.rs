@@ -1,10 +1,27 @@
 use std::path::Path;
 
-use rusqlite::{Connection, OptionalExtension, Row, params};
+use rusqlite::{Connection, ErrorCode, OptionalExtension, Row, params};
 
 use crate::error::AppError;
 use crate::models::Stopwatch;
 use crate::stopwatch;
+
+/// Memetakan error saat inisialisasi database menjadi `AppError::DatabaseCorrupted`
+/// apabila berkas SQLite rusak atau bukan berkas database yang valid.
+fn map_db_init_error(db_path: &Path, err: impl Into<AppError>) -> AppError {
+    let app_err = err.into();
+    if let AppError::Database(ref db_err) = app_err
+        && let rusqlite::Error::SqliteFailure(ref sqlite_err, _) = *db_err
+        && (sqlite_err.code == ErrorCode::NotADatabase
+            || sqlite_err.code == ErrorCode::DatabaseCorrupt)
+    {
+        return AppError::DatabaseCorrupted {
+            path: db_path.display().to_string(),
+            reason: db_err.to_string(),
+        };
+    }
+    app_err
+}
 
 /// Mengatur PRAGMA koneksi SQLite agar aman dan mendukung konkurensi WAL.
 fn configure_connection(conn: &Connection) -> Result<(), AppError> {
@@ -48,9 +65,9 @@ pub fn init_db(db_path: &Path) -> Result<Connection, AppError> {
     {
         std::fs::create_dir_all(parent)?;
     }
-    let conn = Connection::open(db_path)?;
-    configure_connection(&conn)?;
-    migrate(&conn)?;
+    let conn = Connection::open(db_path).map_err(|err| map_db_init_error(db_path, err))?;
+    configure_connection(&conn).map_err(|err| map_db_init_error(db_path, err))?;
+    migrate(&conn).map_err(|err| map_db_init_error(db_path, err))?;
     Ok(conn)
 }
 
@@ -461,5 +478,28 @@ mod tests {
             create_stopwatch(&conn, Some("Stopwatch 3"), 1_300).expect("create duplicate name");
         assert_eq!(dup.name, "Stopwatch 3");
         assert_eq!(dup.position, 4);
+    }
+
+    #[test]
+    fn test_corrupted_database_file_returns_clear_error_and_preserves_file() {
+        let temp_dir = tempfile::tempdir().expect("create tempdir");
+        let db_path = temp_dir.path().join("multi-stopwatch.db");
+        let corrupted_bytes = b"NOT_A_VALID_SQLITE_HEADER_DATA_1234567890";
+
+        std::fs::write(&db_path, corrupted_bytes).expect("write corrupted bytes");
+
+        let result = init_db(&db_path);
+        match result {
+            Err(AppError::DatabaseCorrupted { ref path, ref reason }) => {
+                assert_eq!(path, &db_path.display().to_string());
+                assert!(!reason.is_empty());
+            }
+            other => panic!("expected Err(AppError::DatabaseCorrupted), got: {other:?}"),
+        }
+
+        // Pastikan file asli di disk tidak dihapus dan isinya sama persis (tidak ditimpa)
+        assert!(db_path.exists());
+        let after_bytes = std::fs::read(&db_path).expect("read file after init_db failure");
+        assert_eq!(after_bytes.as_slice(), corrupted_bytes);
     }
 }
