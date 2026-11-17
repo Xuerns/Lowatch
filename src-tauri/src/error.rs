@@ -14,6 +14,12 @@ pub enum AppError {
     #[error("Stopwatch with ID {0} not found.")]
     NotFound(i64),
 
+    #[error("Timer with ID {0} not found.")]
+    TimerNotFound(i64),
+
+    #[error("Timer duration must be between 1 second and 99:59:59.")]
+    InvalidTimerDuration,
+
     #[error("Failed to access internal state lock.")]
     StateLockPoisoned,
 

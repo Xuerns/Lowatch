@@ -57,3 +57,67 @@ impl Stopwatch {
         }
     }
 }
+
+/// Status turunan timer countdown (tidak disimpan di kolom database).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum TimerStatus {
+    Idle,
+    Running,
+    Paused,
+    Completed,
+}
+
+/// Representasi baris tabel `timers` di SQLite.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Timer {
+    pub id: i64,
+    pub name: String,
+    pub duration_ms: i64,
+    pub remaining_ms: i64,
+    pub started_at_ms: Option<i64>,
+    pub heartbeat_ms: Option<i64>,
+    pub position: i64,
+    pub created_at_ms: i64,
+    pub updated_at_ms: i64,
+}
+
+/// Data Transfer Object (DTO) timer yang diserialisasi ke frontend melalui IPC Tauri.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TimerDto {
+    pub id: i64,
+    pub name: String,
+    pub duration_ms: i64,
+    pub remaining_ms: i64,
+    pub started_at_ms: Option<i64>,
+    pub status: TimerStatus,
+    pub position: i64,
+}
+
+impl Timer {
+    /// Menentukan status timer berdasarkan `started_at_ms`, `remaining_ms`, dan `duration_ms`.
+    pub fn status(&self) -> TimerStatus {
+        if self.started_at_ms.is_some() {
+            TimerStatus::Running
+        } else if self.remaining_ms <= 0 {
+            TimerStatus::Completed
+        } else if self.remaining_ms < self.duration_ms {
+            TimerStatus::Paused
+        } else {
+            TimerStatus::Idle
+        }
+    }
+
+    /// Mengonversi entity domain `Timer` menjadi `TimerDto`.
+    pub fn to_dto(&self) -> TimerDto {
+        TimerDto {
+            id: self.id,
+            name: self.name.clone(),
+            duration_ms: self.duration_ms,
+            remaining_ms: self.remaining_ms,
+            started_at_ms: self.started_at_ms,
+            status: self.status(),
+            position: self.position,
+        }
+    }
+}

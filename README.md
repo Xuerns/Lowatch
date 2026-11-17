@@ -1,7 +1,7 @@
 <div align="center">
   <img src="assets/Logo.png" alt="Lowatch Logo" width="120" />
   <h1>Lowatch</h1>
-  <p><strong>Modern, Lightweight, Open Source Multi-Stopwatch Desktop App for Windows</strong></p>
+  <p>Lightweight, open-source multi-stopwatch desktop app for Windows</p>
 
   <p>
     <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/Rust-1.85+-black?logo=rust&logoColor=white" alt="Rust Version"></a>
@@ -13,10 +13,10 @@
 
 ## Overview
 
-**Lowatch** is a modern, lightweight, and local-first multi-stopwatch desktop application designed for tracking multiple tasks simultaneously. Each stopwatch has its own name and can be started, paused, reset, or renamed independently in a clean grid layout.
+Lowatch is a local-first desktop app for tracking multiple tasks at once. Each stopwatch has its own name and sits in a grid where you can start, pause, reset, or rename it independently.
 
-When you need to stay focused on a single task, **Focus Mode** shrinks the window into a compact, always-on-top widget pinned to the top-right corner of your screen. Time is calculated from system timestamps rather than UI tick counters—ensuring accurate tracking even when minimized—and all state is persisted locally in SQLite with **no accounts, no logins, and no servers**.
+For single-task work, Focus Mode shrinks the window into a compact, always-on-top widget pinned to the top-right corner of the screen. The app calculates elapsed time from system timestamps instead of UI tick counters, so tracking stays accurate even when minimized. All state is stored locally in SQLite without accounts or remote servers.
 
 ## License
 
-This project is licensed under the Apache License 2.0 — see the [LICENSE](LICENSE) file for details.
+This project is licensed under the Apache License 2.0. See the [LICENSE](LICENSE) file for details.

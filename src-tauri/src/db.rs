@@ -3,8 +3,9 @@ use std::path::Path;
 use rusqlite::{Connection, ErrorCode, OptionalExtension, Row, params};
 
 use crate::error::AppError;
-use crate::models::Stopwatch;
+use crate::models::{Stopwatch, Timer};
 use crate::stopwatch;
+use crate::timer;
 
 /// Memetakan error saat inisialisasi database menjadi `AppError::DatabaseCorrupted`
 /// apabila berkas SQLite rusak atau bukan berkas database yang valid.
@@ -52,6 +53,25 @@ pub fn migrate(conn: &Connection) -> Result<(), AppError> {
              );
              CREATE INDEX IF NOT EXISTS idx_stopwatches_position ON stopwatches(position ASC, id ASC);
              PRAGMA user_version = 1;
+             COMMIT;",
+        )?;
+    }
+    if version < 2 {
+        conn.execute_batch(
+            "BEGIN;
+             CREATE TABLE IF NOT EXISTS timers (
+                 id             INTEGER PRIMARY KEY AUTOINCREMENT,
+                 name           TEXT    NOT NULL,
+                 duration_ms    INTEGER NOT NULL,
+                 remaining_ms   INTEGER NOT NULL,
+                 started_at_ms  INTEGER,
+                 heartbeat_ms   INTEGER,
+                 position       INTEGER NOT NULL,
+                 created_at_ms  INTEGER NOT NULL,
+                 updated_at_ms  INTEGER NOT NULL
+             );
+             CREATE INDEX IF NOT EXISTS idx_timers_position ON timers(position ASC, id ASC);
+             PRAGMA user_version = 2;
              COMMIT;",
         )?;
     }
@@ -204,7 +224,7 @@ pub fn delete_stopwatch(conn: &Connection, id: i64) -> Result<(), AppError> {
     Ok(())
 }
 
-/// Menjeda seluruh stopwatch yang sedang berjalan dalam satu transaksi SQLite.
+/// Menjeda seluruh stopwatch dan timer yang sedang berjalan dalam satu transaksi SQLite.
 pub fn pause_all_running(conn: &mut Connection, now_ms: i64) -> Result<usize, AppError> {
     let tx = conn.transaction()?;
     let running_items = {
@@ -221,7 +241,21 @@ pub fn pause_all_running(conn: &mut Connection, now_ms: i64) -> Result<usize, Ap
         list
     };
 
-    let count = running_items.len();
+    let running_timers = {
+        let mut stmt = tx.prepare(
+            "SELECT id, name, duration_ms, remaining_ms, started_at_ms, heartbeat_ms, position, created_at_ms, updated_at_ms
+             FROM timers
+             WHERE started_at_ms IS NOT NULL",
+        )?;
+        let rows = stmt.query_map(params![], map_timer_row)?;
+        let mut list = Vec::new();
+        for row in rows {
+            list.push(row?);
+        }
+        list
+    };
+
+    let count = running_items.len() + running_timers.len();
     for mut sw in running_items {
         stopwatch::pause(&mut sw, now_ms);
         tx.execute(
@@ -238,11 +272,27 @@ pub fn pause_all_running(conn: &mut Connection, now_ms: i64) -> Result<usize, Ap
         )?;
     }
 
+    for mut t in running_timers {
+        timer::pause(&mut t, now_ms);
+        tx.execute(
+            "UPDATE timers
+             SET remaining_ms = ?1, started_at_ms = ?2, heartbeat_ms = ?3, updated_at_ms = ?4
+             WHERE id = ?5",
+            params![
+                t.remaining_ms,
+                t.started_at_ms,
+                t.heartbeat_ms,
+                t.updated_at_ms,
+                t.id
+            ],
+        )?;
+    }
+
     tx.commit()?;
     Ok(count)
 }
 
-/// Memulihkan seluruh stopwatch yang masih berstatus running ketika aplikasi dibuka kembali setelah crash.
+/// Memulihkan seluruh stopwatch dan timer yang masih berstatus running ketika aplikasi dibuka kembali setelah crash.
 pub fn recover_crashed_running(conn: &mut Connection, now_ms: i64) -> Result<usize, AppError> {
     let tx = conn.transaction()?;
     let crashed_items = {
@@ -259,7 +309,21 @@ pub fn recover_crashed_running(conn: &mut Connection, now_ms: i64) -> Result<usi
         list
     };
 
-    let count = crashed_items.len();
+    let crashed_timers = {
+        let mut stmt = tx.prepare(
+            "SELECT id, name, duration_ms, remaining_ms, started_at_ms, heartbeat_ms, position, created_at_ms, updated_at_ms
+             FROM timers
+             WHERE started_at_ms IS NOT NULL",
+        )?;
+        let rows = stmt.query_map(params![], map_timer_row)?;
+        let mut list = Vec::new();
+        for row in rows {
+            list.push(row?);
+        }
+        list
+    };
+
+    let count = crashed_items.len() + crashed_timers.len();
     for mut sw in crashed_items {
         stopwatch::recover_from_crash(&mut sw, now_ms);
         tx.execute(
@@ -276,19 +340,173 @@ pub fn recover_crashed_running(conn: &mut Connection, now_ms: i64) -> Result<usi
         )?;
     }
 
+    for mut t in crashed_timers {
+        timer::recover_from_crash(&mut t, now_ms);
+        tx.execute(
+            "UPDATE timers
+             SET remaining_ms = ?1, started_at_ms = ?2, heartbeat_ms = ?3, updated_at_ms = ?4
+             WHERE id = ?5",
+            params![
+                t.remaining_ms,
+                t.started_at_ms,
+                t.heartbeat_ms,
+                t.updated_at_ms,
+                t.id
+            ],
+        )?;
+    }
+
     tx.commit()?;
     Ok(count)
 }
 
-/// Memperbarui nilai `heartbeat_ms` untuk semua stopwatch yang sedang berjalan.
+/// Memperbarui nilai `heartbeat_ms` untuk semua stopwatch dan timer yang sedang berjalan.
 pub fn update_running_heartbeats(conn: &Connection, now_ms: i64) -> Result<usize, AppError> {
-    let affected = conn.execute(
+    let sw_affected = conn.execute(
         "UPDATE stopwatches
          SET heartbeat_ms = ?1, updated_at_ms = ?1
          WHERE started_at_ms IS NOT NULL",
         params![now_ms],
     )?;
-    Ok(affected)
+    let timer_affected = conn.execute(
+        "UPDATE timers
+         SET heartbeat_ms = ?1, updated_at_ms = ?1
+         WHERE started_at_ms IS NOT NULL",
+        params![now_ms],
+    )?;
+    Ok(sw_affected + timer_affected)
+}
+
+fn map_timer_row(row: &Row<'_>) -> Result<Timer, rusqlite::Error> {
+    Ok(Timer {
+        id: row.get(0)?,
+        name: row.get(1)?,
+        duration_ms: row.get(2)?,
+        remaining_ms: row.get(3)?,
+        started_at_ms: row.get(4)?,
+        heartbeat_ms: row.get(5)?,
+        position: row.get(6)?,
+        created_at_ms: row.get(7)?,
+        updated_at_ms: row.get(8)?,
+    })
+}
+
+/// Mengambil seluruh daftar timer diurutkan berdasarkan `position ASC, id ASC`.
+pub fn list_timers(conn: &Connection) -> Result<Vec<Timer>, AppError> {
+    let mut stmt = conn.prepare(
+        "SELECT id, name, duration_ms, remaining_ms, started_at_ms, heartbeat_ms, position, created_at_ms, updated_at_ms
+         FROM timers
+         ORDER BY position ASC, id ASC",
+    )?;
+    let rows = stmt.query_map(params![], map_timer_row)?;
+    let mut items = Vec::new();
+    for row in rows {
+        items.push(row?);
+    }
+    Ok(items)
+}
+
+/// Mengambil satu timer berdasarkan `id`.
+pub fn get_timer(conn: &Connection, id: i64) -> Result<Timer, AppError> {
+    let mut stmt = conn.prepare(
+        "SELECT id, name, duration_ms, remaining_ms, started_at_ms, heartbeat_ms, position, created_at_ms, updated_at_ms
+         FROM timers
+         WHERE id = ?1",
+    )?;
+    let t = stmt
+        .query_row(params![id], map_timer_row)
+        .optional()?
+        .ok_or(AppError::TimerNotFound(id))?;
+    Ok(t)
+}
+
+/// Menghitung angka `N` berikutnya untuk penamaan default `"Timer N"` dan `position`.
+pub fn next_timer_default_number(conn: &Connection) -> Result<i64, AppError> {
+    let next_pos: i64 = conn.query_row(
+        "SELECT COALESCE(MAX(position), 0) + 1 FROM timers",
+        params![],
+        |row| row.get(0),
+    )?;
+    Ok(next_pos.max(1))
+}
+
+/// Membuat timer baru di database.
+pub fn create_timer(
+    conn: &Connection,
+    name: Option<&str>,
+    duration_ms: Option<i64>,
+    now_ms: i64,
+) -> Result<Timer, AppError> {
+    let position = next_timer_default_number(conn)?;
+    let resolved_name = timer::resolve_create_name(name, position)?;
+    let valid_duration = timer::validate_duration(duration_ms.unwrap_or(timer::DEFAULT_DURATION_MS))?;
+
+    conn.execute(
+        "INSERT INTO timers (name, duration_ms, remaining_ms, started_at_ms, heartbeat_ms, position, created_at_ms, updated_at_ms)
+         VALUES (?1, ?2, ?2, NULL, NULL, ?3, ?4, ?4)",
+        params![resolved_name, valid_duration, position, now_ms],
+    )?;
+
+    let id = conn.last_insert_rowid();
+    Ok(Timer {
+        id,
+        name: resolved_name,
+        duration_ms: valid_duration,
+        remaining_ms: valid_duration,
+        started_at_ms: None,
+        heartbeat_ms: None,
+        position,
+        created_at_ms: now_ms,
+        updated_at_ms: now_ms,
+    })
+}
+
+/// Mengubah nama timer yang sudah ada.
+pub fn rename_timer(
+    conn: &Connection,
+    id: i64,
+    new_name: &str,
+    now_ms: i64,
+) -> Result<Timer, AppError> {
+    let validated = stopwatch::validate_name(new_name)?;
+    let affected = conn.execute(
+        "UPDATE timers SET name = ?1, updated_at_ms = ?2 WHERE id = ?3",
+        params![validated, now_ms, id],
+    )?;
+    if affected == 0 {
+        return Err(AppError::TimerNotFound(id));
+    }
+    get_timer(conn, id)
+}
+
+/// Menyimpan perubahan state waktu timer (`duration_ms`, `remaining_ms`, `started_at_ms`, `heartbeat_ms`, `updated_at_ms`) ke database.
+pub fn save_timer_state(conn: &Connection, t: &Timer) -> Result<(), AppError> {
+    let affected = conn.execute(
+        "UPDATE timers
+         SET duration_ms = ?1, remaining_ms = ?2, started_at_ms = ?3, heartbeat_ms = ?4, updated_at_ms = ?5
+         WHERE id = ?6",
+        params![
+            t.duration_ms,
+            t.remaining_ms,
+            t.started_at_ms,
+            t.heartbeat_ms,
+            t.updated_at_ms,
+            t.id
+        ],
+    )?;
+    if affected == 0 {
+        return Err(AppError::TimerNotFound(t.id));
+    }
+    Ok(())
+}
+
+/// Menghapus timer berdasarkan `id`.
+pub fn delete_timer(conn: &Connection, id: i64) -> Result<(), AppError> {
+    let affected = conn.execute("DELETE FROM timers WHERE id = ?1", params![id])?;
+    if affected == 0 {
+        return Err(AppError::TimerNotFound(id));
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -304,13 +522,13 @@ mod tests {
     }
 
     #[test]
-    fn test_migration_sets_user_version_1() {
+    fn test_migration_sets_user_version_2() {
         let conn = open_test_memory_db();
-        assert_eq!(get_user_version(&conn).ok(), Some(1));
+        assert_eq!(get_user_version(&conn).ok(), Some(2));
 
         // Memastikan idempotent jika migrate dipanggil lagi
         assert!(migrate(&conn).is_ok());
-        assert_eq!(get_user_version(&conn).ok(), Some(1));
+        assert_eq!(get_user_version(&conn).ok(), Some(2));
     }
 
     #[test]
@@ -434,7 +652,7 @@ mod tests {
         };
 
         let mut conn2 = init_db(&db_path).expect("init_db reopen");
-        assert_eq!(get_user_version(&conn2).ok(), Some(1));
+        assert_eq!(get_user_version(&conn2).ok(), Some(2));
 
         let loaded = get_stopwatch(&conn2, sw_id).expect("load persisted stopwatch");
         assert_eq!(loaded.name, "Riset SQLite");
@@ -501,5 +719,44 @@ mod tests {
         assert!(db_path.exists());
         let after_bytes = std::fs::read(&db_path).expect("read file after init_db failure");
         assert_eq!(after_bytes.as_slice(), corrupted_bytes);
+    }
+
+    #[test]
+    fn test_timer_crud_and_persistence() {
+        let mut conn = open_test_memory_db();
+
+        let t1 = create_timer(&conn, None, None, 1_000).expect("create default timer");
+        assert_eq!(t1.name, "Timer 1");
+        assert_eq!(t1.duration_ms, timer::DEFAULT_DURATION_MS);
+        assert_eq!(t1.remaining_ms, timer::DEFAULT_DURATION_MS);
+        assert_eq!(t1.position, 1);
+
+        let mut t2 = create_timer(&conn, Some("  Pomodoro  "), Some(150_000), 1_500)
+            .expect("create named timer");
+        assert_eq!(t2.name, "Pomodoro");
+        assert_eq!(t2.duration_ms, 150_000);
+        assert_eq!(t2.position, 2);
+
+        let all = list_timers(&conn).expect("list timers");
+        assert_eq!(all.len(), 2);
+
+        let renamed = rename_timer(&conn, t2.id, "Fokus 25m", 2_000).expect("rename timer");
+        assert_eq!(renamed.name, "Fokus 25m");
+
+        timer::start(&mut t2, 3_000);
+        save_timer_state(&conn, &t2).expect("save running timer");
+
+        let paused_count = pause_all_running(&mut conn, 8_000).expect("pause all running");
+        assert_eq!(paused_count, 1);
+
+        let after_pause = get_timer(&conn, t2.id).expect("get paused timer");
+        assert_eq!(after_pause.remaining_ms, 145_000);
+        assert_eq!(after_pause.started_at_ms, None);
+
+        delete_timer(&conn, t1.id).expect("delete t1");
+        assert!(matches!(
+            delete_timer(&conn, t1.id),
+            Err(AppError::TimerNotFound(id)) if id == t1.id
+        ));
     }
 }

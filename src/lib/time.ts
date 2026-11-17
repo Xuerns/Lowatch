@@ -1,4 +1,4 @@
-import type { StopwatchDto } from "./api";
+import type { StopwatchDto, TimerDto } from "./api";
 
 export interface FormattedTime {
   hours: string;
@@ -44,4 +44,40 @@ export function formatElapsed(elapsedMs: number, showTenths = true): FormattedTi
     : `${hours}:${minutes}:${seconds}`;
 
   return { hours, minutes, seconds, tenths, formatted };
+}
+
+/**
+ * Menghitung sisa waktu timer (dalam ms) berdasarkan snapshot DTO dan timestamp `nowMs`.
+ */
+export function computeRemainingMs(timer: TimerDto, nowMs: number): number {
+  if (timer.started_at_ms !== null) {
+    const elapsed = Math.max(0, nowMs - timer.started_at_ms);
+    return Math.max(0, timer.remaining_ms - elapsed);
+  }
+  return Math.max(0, timer.remaining_ms);
+}
+
+/**
+ * Memecah durasi milidetik menjadi jam, menit, detik (dibulatkan ke atas jika ada sisa ms saat countdown).
+ */
+export function splitDurationMs(durationMs: number): {
+  hours: number;
+  minutes: number;
+  seconds: number;
+} {
+  const totalSeconds = Math.max(0, Math.ceil(durationMs / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  return { hours, minutes, seconds };
+}
+
+/**
+ * Menggabungkan komponen jam, menit, detik menjadi milidetik.
+ */
+export function partsToMs(hours: number, minutes: number, seconds: number): number {
+  const h = Math.max(0, Math.min(99, Math.floor(hours || 0)));
+  const m = Math.max(0, Math.min(59, Math.floor(minutes || 0)));
+  const s = Math.max(0, Math.min(59, Math.floor(seconds || 0)));
+  return (h * 3600 + m * 60 + s) * 1000;
 }

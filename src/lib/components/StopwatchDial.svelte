@@ -1,15 +1,16 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
-  import type { StopwatchStatus } from "../api";
+  import type { StopwatchStatus, TimerStatus } from "../api";
 
   interface Props {
-    status: StopwatchStatus;
-    elapsedMs: number;
+    status: StopwatchStatus | TimerStatus;
+    elapsedMs?: number;
+    progress?: number;
     size?: number;
     children: Snippet;
   }
 
-  let { status, elapsedMs, size = 200, children }: Props = $props();
+  let { status, elapsedMs = 0, progress, size = 200, children }: Props = $props();
 
   const MINUTE_MS = 60_000;
   const TICK_COUNT = 60;
@@ -41,7 +42,11 @@
   });
 
   let safeElapsed = $derived(Math.max(0, elapsedMs));
-  let minuteFraction = $derived((safeElapsed % MINUTE_MS) / MINUTE_MS);
+  let minuteFraction = $derived(
+    progress !== undefined
+      ? Math.max(0, Math.min(1, progress))
+      : (safeElapsed % MINUTE_MS) / MINUTE_MS
+  );
   let litTicks = $derived(Math.floor(minuteFraction * TICK_COUNT));
   let progressOffset = $derived(100 - minuteFraction * 100);
   let handAngle = $derived(minuteFraction * 360);
@@ -54,7 +59,10 @@
         <line
           class="tick"
           class:tick-major={tick.major}
-          class:tick-lit={status !== "idle" && tick.index <= litTicks}
+          class:tick-lit={status !== "idle" &&
+            status !== "completed" &&
+            (progress === undefined || minuteFraction > 0) &&
+            tick.index <= litTicks}
           x1={tick.x1}
           y1={tick.y1}
           x2={tick.x2}

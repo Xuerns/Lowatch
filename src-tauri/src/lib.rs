@@ -4,6 +4,7 @@ pub mod error;
 pub mod focus;
 pub mod models;
 pub mod stopwatch;
+pub mod timer;
 
 use std::sync::{
     Arc, Condvar, Mutex,
@@ -167,6 +168,15 @@ pub fn run() {
             commands::delete_stopwatch,
             commands::enter_focus_mode,
             commands::exit_focus_mode,
+            commands::list_timers,
+            commands::create_timer,
+            commands::rename_timer,
+            commands::set_timer_duration,
+            commands::start_timer,
+            commands::pause_timer,
+            commands::complete_timer,
+            commands::reset_timer,
+            commands::delete_timer,
         ]);
 
     let app = match builder.build(tauri::generate_context!()) {

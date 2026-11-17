@@ -3,8 +3,9 @@ use tauri::State;
 use crate::AppState;
 use crate::db;
 use crate::error::AppError;
-use crate::models::{Stopwatch, StopwatchDto};
+use crate::models::{Stopwatch, StopwatchDto, Timer, TimerDto};
 use crate::stopwatch;
+use crate::timer;
 
 /// Helper internal untuk mengambil seluruh daftar stopwatch sebagai DTO.
 pub fn list_stopwatches_inner(state: &AppState) -> Result<Vec<StopwatchDto>, AppError> {
@@ -140,6 +141,154 @@ pub fn exit_focus_mode(
     state: State<'_, AppState>,
 ) -> Result<(), String> {
     crate::focus::exit_focus_mode(&window, &state).map_err(Into::into)
+}
+
+/// Helper internal untuk mengambil seluruh daftar timer sebagai DTO.
+pub fn list_timers_inner(state: &AppState) -> Result<Vec<TimerDto>, AppError> {
+    let conn = state.lock_db()?;
+    let items = db::list_timers(&conn)?;
+    Ok(items.iter().map(Timer::to_dto).collect())
+}
+
+/// Helper internal untuk membuat timer baru.
+pub fn create_timer_inner(
+    state: &AppState,
+    name: Option<&str>,
+    duration_ms: Option<i64>,
+) -> Result<TimerDto, AppError> {
+    let now = stopwatch::now_ms()?;
+    let conn = state.lock_db()?;
+    let t = db::create_timer(&conn, name, duration_ms, now)?;
+    Ok(t.to_dto())
+}
+
+/// Helper internal untuk mengubah nama timer berdasarkan ID.
+pub fn rename_timer_inner(state: &AppState, id: i64, name: &str) -> Result<TimerDto, AppError> {
+    let now = stopwatch::now_ms()?;
+    let conn = state.lock_db()?;
+    let t = db::rename_timer(&conn, id, name, now)?;
+    Ok(t.to_dto())
+}
+
+/// Helper internal untuk mengubah durasi target timer dan mereset sisa waktu.
+pub fn set_timer_duration_inner(
+    state: &AppState,
+    id: i64,
+    duration_ms: i64,
+) -> Result<TimerDto, AppError> {
+    let now = stopwatch::now_ms()?;
+    let conn = state.lock_db()?;
+    let mut t = db::get_timer(&conn, id)?;
+    timer::set_duration(&mut t, duration_ms, now)?;
+    db::save_timer_state(&conn, &t)?;
+    Ok(t.to_dto())
+}
+
+/// Helper internal untuk menjalankan (start/resume) timer secara idempotent.
+pub fn start_timer_inner(state: &AppState, id: i64) -> Result<TimerDto, AppError> {
+    let now = stopwatch::now_ms()?;
+    let conn = state.lock_db()?;
+    let mut t = db::get_timer(&conn, id)?;
+    if t.started_at_ms.is_none() {
+        timer::start(&mut t, now);
+        db::save_timer_state(&conn, &t)?;
+    }
+    Ok(t.to_dto())
+}
+
+/// Helper internal untuk menjeda (pause) timer secara idempotent.
+pub fn pause_timer_inner(state: &AppState, id: i64) -> Result<TimerDto, AppError> {
+    let now = stopwatch::now_ms()?;
+    let conn = state.lock_db()?;
+    let mut t = db::get_timer(&conn, id)?;
+    if t.started_at_ms.is_some() {
+        timer::pause(&mut t, now);
+        db::save_timer_state(&conn, &t)?;
+    }
+    Ok(t.to_dto())
+}
+
+/// Helper internal untuk menandai timer telah selesai (`remaining_ms = 0`).
+pub fn complete_timer_inner(state: &AppState, id: i64) -> Result<TimerDto, AppError> {
+    let now = stopwatch::now_ms()?;
+    let conn = state.lock_db()?;
+    let mut t = db::get_timer(&conn, id)?;
+    timer::complete(&mut t, now);
+    db::save_timer_state(&conn, &t)?;
+    Ok(t.to_dto())
+}
+
+/// Helper internal untuk mereset timer kembali ke `duration_ms` (`Idle`).
+pub fn reset_timer_inner(state: &AppState, id: i64) -> Result<TimerDto, AppError> {
+    let now = stopwatch::now_ms()?;
+    let conn = state.lock_db()?;
+    let mut t = db::get_timer(&conn, id)?;
+    timer::reset(&mut t, now);
+    db::save_timer_state(&conn, &t)?;
+    Ok(t.to_dto())
+}
+
+/// Helper internal untuk menghapus timer berdasarkan ID.
+pub fn delete_timer_inner(state: &AppState, id: i64) -> Result<(), AppError> {
+    let conn = state.lock_db()?;
+    db::delete_timer(&conn, id)
+}
+
+#[tauri::command]
+pub fn list_timers(state: State<'_, AppState>) -> Result<Vec<TimerDto>, String> {
+    list_timers_inner(&state).map_err(Into::into)
+}
+
+#[tauri::command]
+pub fn create_timer(
+    state: State<'_, AppState>,
+    name: Option<String>,
+    duration_ms: Option<i64>,
+) -> Result<TimerDto, String> {
+    create_timer_inner(&state, name.as_deref(), duration_ms).map_err(Into::into)
+}
+
+#[tauri::command]
+pub fn rename_timer(
+    state: State<'_, AppState>,
+    id: i64,
+    name: String,
+) -> Result<TimerDto, String> {
+    rename_timer_inner(&state, id, &name).map_err(Into::into)
+}
+
+#[tauri::command]
+pub fn set_timer_duration(
+    state: State<'_, AppState>,
+    id: i64,
+    duration_ms: i64,
+) -> Result<TimerDto, String> {
+    set_timer_duration_inner(&state, id, duration_ms).map_err(Into::into)
+}
+
+#[tauri::command]
+pub fn start_timer(state: State<'_, AppState>, id: i64) -> Result<TimerDto, String> {
+    start_timer_inner(&state, id).map_err(Into::into)
+}
+
+#[tauri::command]
+pub fn pause_timer(state: State<'_, AppState>, id: i64) -> Result<TimerDto, String> {
+    pause_timer_inner(&state, id).map_err(Into::into)
+}
+
+#[tauri::command]
+pub fn complete_timer(state: State<'_, AppState>, id: i64) -> Result<TimerDto, String> {
+    complete_timer_inner(&state, id).map_err(Into::into)
+}
+
+#[tauri::command]
+pub fn reset_timer(state: State<'_, AppState>, id: i64) -> Result<TimerDto, String> {
+    reset_timer_inner(&state, id).map_err(Into::into)
+}
+
+#[tauri::command]
+pub fn delete_timer(state: State<'_, AppState>, id: i64) -> Result<(), String> {
+    delete_timer_inner(&state, id).map_err(Into::into)
 }
 
 #[cfg(test)]

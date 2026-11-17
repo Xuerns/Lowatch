@@ -2,17 +2,27 @@
   import { onMount } from "svelte";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import FocusView from "$lib/components/FocusView.svelte";
+  import Sidebar, { type AppPage } from "$lib/components/Sidebar.svelte";
   import StopwatchCard from "$lib/components/StopwatchCard.svelte";
+  import TimerCard from "$lib/components/TimerCard.svelte";
   import { stopwatchStore } from "$lib/stores/stopwatches.svelte";
+  import { timerStore } from "$lib/stores/timers.svelte";
 
   const appWindow = getCurrentWindow();
 
+  let activePage = $state<AppPage>("stopwatch");
+  let isSidebarCollapsed = $state(false);
   let isCreating = $state(false);
   let isMaximized = $state(false);
   let isEditMode = $state(false);
 
+  let activeErrorMessage = $derived(
+    activePage === "stopwatch" ? stopwatchStore.errorMessage : timerStore.errorMessage
+  );
+
   onMount(() => {
     void stopwatchStore.load();
+    void timerStore.load();
 
     let unlistenResize: (() => void) | undefined;
     void (async () => {
@@ -29,6 +39,7 @@
     return () => {
       unlistenResize?.();
       stopwatchStore.destroy();
+      timerStore.destroy();
     };
   });
 
@@ -59,9 +70,26 @@
     if (isCreating) return;
     isCreating = true;
     try {
-      await stopwatchStore.create();
+      if (activePage === "stopwatch") {
+        await stopwatchStore.create();
+      } else {
+        await timerStore.create();
+      }
     } finally {
       isCreating = false;
+    }
+  }
+
+  function handleSelectPage(page: AppPage): void {
+    activePage = page;
+    isEditMode = false;
+  }
+
+  function handleDismissError(): void {
+    if (activePage === "stopwatch") {
+      stopwatchStore.clearError();
+    } else {
+      timerStore.clearError();
     }
   }
 
@@ -81,9 +109,36 @@
 {:else}
   <main class="app-shell">
     <header class="titlebar" data-tauri-drag-region>
-      <div class="titlebar-brand" data-tauri-drag-region>
-        <img src="/logo.png" alt="Lowatch logo" class="titlebar-logo" />
-        <span class="titlebar-title" data-tauri-drag-region>Lowatch</span>
+      <div class="titlebar-left" data-tauri-drag-region>
+        {#if !isMaximized}
+          <button
+            type="button"
+            class="titlebar-toggle"
+            onclick={() => (isSidebarCollapsed = !isSidebarCollapsed)}
+            aria-label={isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            title={isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            <svg
+              width="15"
+              height="15"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <rect x="3" y="3" width="18" height="18" rx="2" />
+              <line x1="9" y1="3" x2="9" y2="21" />
+            </svg>
+          </button>
+        {/if}
+
+        <div class="titlebar-brand" data-tauri-drag-region>
+          <img src="/logo.png" alt="Lowatch logo" class="titlebar-logo" />
+          <span class="titlebar-title" data-tauri-drag-region>Lowatch</span>
+        </div>
       </div>
 
       <div class="titlebar-controls">
@@ -133,62 +188,140 @@
       </div>
     </header>
 
-    {#if stopwatchStore.errorMessage !== null}
-      <div class="error-banner" role="alert">
-        <span class="error-text">{stopwatchStore.errorMessage}</span>
-        <button
-          type="button"
-          class="btn-dismiss"
-          onclick={() => stopwatchStore.clearError()}
-        >
-          Dismiss
-        </button>
+    <div class="workspace">
+      <Sidebar
+        {activePage}
+        collapsed={!isMaximized && isSidebarCollapsed}
+        stopwatchRunningCount={stopwatchStore.runningCount}
+        timerRunningCount={timerStore.runningCount}
+        onSelectPage={handleSelectPage}
+      />
+
+      <div class="content-area">
+        {#if activeErrorMessage !== null}
+          <div class="error-banner" role="alert">
+            <span class="error-text">{activeErrorMessage}</span>
+            <button
+              type="button"
+              class="btn-dismiss"
+              onclick={handleDismissError}
+            >
+              Dismiss
+            </button>
+          </div>
+        {/if}
+
+        {#if activePage === "stopwatch"}
+          {#if stopwatchStore.loading && stopwatchStore.items.length === 0}
+            <div class="empty-state">
+              <p class="empty-subtext">Loading stopwatches...</p>
+            </div>
+          {:else if stopwatchStore.items.length === 0}
+            <div class="empty-state">
+              <svg
+                class="empty-icon"
+                width="36"
+                height="36"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.6"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <circle cx="12" cy="13" r="8" />
+                <path d="M12 9v4l2.5 1.5" />
+                <path d="M10 2h4" />
+                <path d="M12 2v3" />
+              </svg>
+              <p class="empty-title">You don't have any stopwatches.</p>
+              <p class="empty-subtext">Select "+" below to add a new stopwatch.</p>
+            </div>
+          {:else}
+            <section class="stopwatch-grid" aria-label="Stopwatch list">
+              {#each stopwatchStore.items as item (item.id)}
+                <StopwatchCard
+                  stopwatch={item}
+                  nowMs={stopwatchStore.nowMs}
+                  editMode={isEditMode}
+                  onStart={(id) => stopwatchStore.start(id)}
+                  onPause={(id) => stopwatchStore.pause(id)}
+                  onReset={(id) => stopwatchStore.reset(id)}
+                  onRename={(id, name) => stopwatchStore.rename(id, name)}
+                  onDelete={(id) => stopwatchStore.remove(id)}
+                  onFocus={handleFocusStopwatch}
+                />
+              {/each}
+            </section>
+          {/if}
+        {:else if timerStore.loading && timerStore.items.length === 0}
+          <div class="empty-state">
+            <p class="empty-subtext">Loading timers...</p>
+          </div>
+        {:else if timerStore.items.length === 0}
+          <div class="empty-state">
+            <svg
+              class="empty-icon"
+              width="36"
+              height="36"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.6"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M5 2h14" />
+              <path d="M5 22h14" />
+              <path d="M7 2v4.5a5 5 0 0 0 1.46 3.54L12 13.5l3.54-3.46A5 5 0 0 0 17 6.5V2" />
+              <path d="M7 22v-4.5a5 5 0 0 1 1.46-3.54L12 10.5l3.54 3.46A5 5 0 0 1 17 17.5V22" />
+            </svg>
+            <p class="empty-title">You don't have any timers.</p>
+            <p class="empty-subtext">Select "+" below to add a new timer.</p>
+          </div>
+        {:else}
+          <section class="stopwatch-grid" aria-label="Timer list">
+            {#each timerStore.items as item (item.id)}
+              <TimerCard
+                timer={item}
+                nowMs={timerStore.nowMs}
+                editMode={isEditMode}
+                onStart={(id) => timerStore.start(id)}
+                onPause={(id) => timerStore.pause(id)}
+                onReset={(id) => timerStore.reset(id)}
+                onRename={(id, name) => timerStore.rename(id, name)}
+                onSetDuration={(id, ms) => timerStore.setDuration(id, ms)}
+                onDelete={(id) => timerStore.remove(id)}
+              />
+            {/each}
+          </section>
+        {/if}
       </div>
-    {/if}
+    </div>
 
-    <section class="stopwatch-grid" aria-label="Stopwatch list">
-      {#if stopwatchStore.loading && stopwatchStore.items.length === 0}
-        <div class="empty-state">
-          <p class="empty-text">Loading stopwatches...</p>
-        </div>
-      {:else if stopwatchStore.items.length === 0}
-        <div class="empty-state">
-          <p class="empty-text">No stopwatches yet</p>
-          <button
-            type="button"
-            class="btn-empty-create"
-            disabled={isCreating}
-            onclick={handleQuickCreate}
-          >
-            + Create stopwatch
-          </button>
-        </div>
-      {:else}
-        {#each stopwatchStore.items as item (item.id)}
-          <StopwatchCard
-            stopwatch={item}
-            nowMs={stopwatchStore.nowMs}
-            editMode={isEditMode}
-            onStart={(id) => stopwatchStore.start(id)}
-            onPause={(id) => stopwatchStore.pause(id)}
-            onReset={(id) => stopwatchStore.reset(id)}
-            onRename={(id, name) => stopwatchStore.rename(id, name)}
-            onDelete={(id) => stopwatchStore.remove(id)}
-            onFocus={handleFocusStopwatch}
-          />
-        {/each}
-      {/if}
-    </section>
-
-    <div class="fab-bar" role="toolbar" aria-label="Stopwatch actions">
+    <div
+      class="fab-bar"
+      role="toolbar"
+      aria-label={activePage === "stopwatch" ? "Stopwatch actions" : "Timer actions"}
+    >
       <button
         type="button"
         class="fab-btn"
         class:fab-btn-active={isEditMode}
         onclick={() => (isEditMode = !isEditMode)}
         aria-pressed={isEditMode}
-        aria-label={isEditMode ? "Done editing" : "Edit stopwatches"}
-        title={isEditMode ? "Done editing" : "Edit stopwatches"}
+        aria-label={isEditMode
+          ? "Done editing"
+          : activePage === "stopwatch"
+            ? "Edit stopwatches"
+            : "Edit timers"}
+        title={isEditMode
+          ? "Done editing"
+          : activePage === "stopwatch"
+            ? "Edit stopwatches"
+            : "Edit timers"}
       >
         {#if isEditMode}
           <svg
@@ -227,8 +360,8 @@
         class="fab-btn"
         disabled={isCreating}
         onclick={handleQuickCreate}
-        aria-label="New stopwatch"
-        title="New stopwatch"
+        aria-label={activePage === "stopwatch" ? "New stopwatch" : "New timer"}
+        title={activePage === "stopwatch" ? "New stopwatch" : "New timer"}
       >
         <svg
           width="17"
@@ -268,6 +401,36 @@
     justify-content: space-between;
     user-select: none;
     flex-shrink: 0;
+  }
+
+  .titlebar-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .titlebar-toggle {
+    width: 28px;
+    height: 28px;
+    border: none;
+    border-radius: 6px;
+    background-color: transparent;
+    color: #a3a3a3;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    padding: 0;
+    flex-shrink: 0;
+    transition:
+      background-color 120ms ease,
+      color 120ms ease;
+  }
+
+  .titlebar-toggle:hover {
+    background-color: rgba(255, 255, 255, 0.08);
+    color: #ffffff;
   }
 
   .titlebar-brand {
@@ -362,12 +525,28 @@
     color: #ffffff;
   }
 
+  .workspace {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    min-width: 0;
+    border-top: 1px solid #303030;
+  }
+
+  .content-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+  }
+
   .stopwatch-grid {
     flex: 1;
     overflow-y: auto;
-    padding: 8px 20px 76px;
+    padding: 16px 20px 76px;
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(min(100%, 310px), 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
     align-content: start;
     gap: 16px;
   }
@@ -422,48 +601,32 @@
   }
 
   .empty-state {
-    grid-column: 1 / -1;
-    margin: auto 0;
-    padding: 32px 16px;
-    border: 1px solid #383838;
-    border-radius: 8px;
-    background-color: #2b2b2b;
+    flex: 1;
+    padding: 32px 20px 64px;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 12px;
+    gap: 8px;
     text-align: center;
+    user-select: none;
   }
 
-  .empty-text {
+  .empty-icon {
+    color: #d4d4d4;
+    margin-bottom: 4px;
+  }
+
+  .empty-title {
     margin: 0;
-    font-size: 0.9375rem;
-    color: #b3b3b3;
-  }
-
-  .btn-empty-create {
-    background-color: #f5f5f5;
-    color: #202020;
-    border: 1px solid #f5f5f5;
-    border-radius: 6px;
-    padding: 8px 16px;
-    font-family: inherit;
-    font-size: 0.875rem;
+    font-size: 1.0625rem;
     font-weight: 600;
-    cursor: pointer;
-    transition:
-      background-color 120ms ease,
-      border-color 120ms ease;
+    color: #f5f5f5;
   }
 
-  .btn-empty-create:hover:not(:disabled) {
-    background-color: #e5e5e5;
-    border-color: #e5e5e5;
-  }
-
-  .btn-empty-create:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
+  .empty-subtext {
+    margin: 0;
+    font-size: 0.8125rem;
+    color: #8a8a8a;
   }
 </style>
