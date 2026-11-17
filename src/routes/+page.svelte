@@ -1,4 +1,4 @@
-<script lang="ts">
+﻿<script lang="ts">
   import { onMount } from "svelte";
   import { fly } from "svelte/transition";
   import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -6,6 +6,7 @@
   import SettingsView from "$lib/components/SettingsView.svelte";
   import Sidebar, { type AppPage } from "$lib/components/Sidebar.svelte";
   import StopwatchCard from "$lib/components/StopwatchCard.svelte";
+  import StopwatchMaximizedView from "$lib/components/StopwatchMaximizedView.svelte";
   import TimerCard from "$lib/components/TimerCard.svelte";
   import { settingsStore } from "$lib/stores/settings.svelte";
   import { stopwatchStore } from "$lib/stores/stopwatches.svelte";
@@ -18,6 +19,21 @@
   let isCreating = $state(false);
   let isMaximized = $state(false);
   let isEditMode = $state(false);
+  let maximizedStopwatchId = $state<number | null>(null);
+
+  let maximizedStopwatch = $derived(
+    maximizedStopwatchId !== null
+      ? (stopwatchStore.items.find((item) => item.id === maximizedStopwatchId) ?? null)
+      : null
+  );
+
+  let otherRunningCount = $derived(
+    maximizedStopwatch !== null
+      ? stopwatchStore.items.filter(
+          (item) => item.id !== maximizedStopwatch.id && item.status === "running"
+        ).length
+      : 0
+  );
 
   let activeErrorMessage = $derived(
     activePage === "stopwatch"
@@ -60,6 +76,16 @@
     }
   });
 
+  $effect(() => {
+    if (
+      !stopwatchStore.loading &&
+      maximizedStopwatchId !== null &&
+      maximizedStopwatch === null
+    ) {
+      maximizedStopwatchId = null;
+    }
+  });
+
   async function handleMinimize(): Promise<void> {
     await appWindow.minimize();
   }
@@ -90,6 +116,7 @@
   function handleSelectPage(page: AppPage): void {
     activePage = page;
     isEditMode = false;
+    maximizedStopwatchId = null;
   }
 
   function handleDismissError(): void {
@@ -295,6 +322,17 @@
               <p class="empty-title">You don't have any stopwatches.</p>
               <p class="empty-subtext">Select "+" below to add a new stopwatch.</p>
             </div>
+          {:else if maximizedStopwatch !== null}
+            <StopwatchMaximizedView
+              stopwatch={maximizedStopwatch}
+              nowMs={stopwatchStore.nowMs}
+              {otherRunningCount}
+              onStart={(id) => stopwatchStore.start(id)}
+              onPause={(id) => stopwatchStore.pause(id)}
+              onReset={(id) => stopwatchStore.reset(id)}
+              onFocus={handleFocusStopwatch}
+              onExit={() => (maximizedStopwatchId = null)}
+            />
           {:else}
             <section class="stopwatch-grid" aria-label="Stopwatch list">
               {#each stopwatchStore.items as item (item.id)}
@@ -308,6 +346,7 @@
                   onRename={(id, name) => stopwatchStore.rename(id, name)}
                   onDelete={(id) => stopwatchStore.remove(id)}
                   onFocus={handleFocusStopwatch}
+                  onMaximize={(id) => (maximizedStopwatchId = id)}
                 />
               {/each}
             </section>
@@ -360,7 +399,7 @@
       </div>
     </div>
 
-    {#if activePage !== "settings"}
+    {#if activePage !== "settings" && !(activePage === "stopwatch" && maximizedStopwatch !== null)}
       <div
         class="fab-bar"
         role="toolbar"
@@ -443,321 +482,3 @@
   </main>
 {/if}
 
-<style>
-  .app-shell {
-    display: flex;
-    flex-direction: column;
-    width: 100%;
-    height: 100vh;
-    background-color: transparent;
-    color: var(--text-primary);
-  }
-
-  .titlebar {
-    height: 36px;
-    padding-left: 12px;
-    background-color: var(--bg-app);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    user-select: none;
-    flex-shrink: 0;
-  }
-
-  .titlebar-left {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    min-width: 0;
-  }
-
-  .titlebar-toggle {
-    width: 28px;
-    height: 28px;
-    border: none;
-    border-radius: 6px;
-    background-color: transparent;
-    color: var(--text-muted);
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    padding: 0;
-    flex-shrink: 0;
-    transition:
-      background-color 120ms ease,
-      color 120ms ease;
-  }
-
-  .titlebar-toggle:hover {
-    background-color: var(--bg-hover);
-    color: var(--text-strong);
-  }
-
-  .titlebar-brand {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    min-width: 0;
-  }
-
-  .titlebar-logo {
-    width: 18px;
-    height: 18px;
-    object-fit: contain;
-    flex-shrink: 0;
-    pointer-events: none;
-  }
-
-  .titlebar-title {
-    font-size: 0.8125rem;
-    font-weight: 500;
-    color: var(--text-primary);
-    letter-spacing: -0.005em;
-  }
-
-  .titlebar-controls {
-    display: flex;
-    align-items: stretch;
-    height: 100%;
-    flex-shrink: 0;
-  }
-
-  .win-btn {
-    width: 46px;
-    height: 100%;
-    border: none;
-    background-color: transparent;
-    color: var(--text-secondary);
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    transition:
-      background-color 100ms ease,
-      color 100ms ease;
-  }
-
-  .win-btn:hover {
-    background-color: var(--bg-hover);
-    color: var(--text-strong);
-  }
-
-  .win-btn-close:hover {
-    background-color: #c42b1c;
-    color: #ffffff;
-  }
-
-  .error-banner {
-    margin: 12px 16px 0;
-    padding: 10px 12px;
-    background-color: var(--bg-card);
-    border: 1px solid var(--border-card);
-    border-radius: 6px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    flex-shrink: 0;
-  }
-
-  .error-text {
-    font-size: 0.8125rem;
-    color: var(--danger-fg);
-  }
-
-  .btn-dismiss {
-    background-color: var(--bg-control);
-    color: var(--text-secondary);
-    border: 1px solid var(--border-control);
-    border-radius: 6px;
-    padding: 4px 10px;
-    font-family: inherit;
-    font-size: 0.75rem;
-    cursor: pointer;
-    flex-shrink: 0;
-    transition:
-      background-color 120ms ease,
-      color 120ms ease;
-  }
-
-  .btn-dismiss:hover {
-    background-color: var(--bg-control-hover);
-    color: var(--text-strong);
-  }
-
-  .notification-banner {
-    position: absolute;
-    top: 12px;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 25;
-    padding: 10px 14px;
-    min-width: 280px;
-    max-width: calc(100% - 32px);
-    background-color: var(--bg-card);
-    border: 1px solid var(--border-strong);
-    border-radius: 10px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-
-  .notification-icon {
-    color: var(--text-primary);
-    flex-shrink: 0;
-  }
-
-  .notification-copy {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 1px;
-  }
-
-  .notification-title {
-    font-size: 0.875rem;
-    font-weight: 600;
-    color: var(--text-primary);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .notification-sub {
-    font-size: 0.75rem;
-    color: var(--text-muted);
-  }
-
-  .btn-stop-sound {
-    background-color: var(--accent-bg);
-    color: var(--accent-fg);
-    border: 1px solid var(--accent-bg);
-    border-radius: 6px;
-    padding: 6px 12px;
-    font-family: inherit;
-    font-size: 0.75rem;
-    font-weight: 600;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    cursor: pointer;
-    flex-shrink: 0;
-    transition:
-      background-color 120ms ease,
-      border-color 120ms ease;
-  }
-
-  .btn-stop-sound:hover {
-    background-color: var(--accent-bg-hover);
-    border-color: var(--accent-bg-hover);
-  }
-
-  .workspace {
-    display: flex;
-    flex: 1;
-    min-height: 0;
-    min-width: 0;
-    border-top: 1px solid var(--border-subtle);
-  }
-
-  .content-area {
-    position: relative;
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    background-color: var(--bg-app);
-    min-width: 0;
-    min-height: 0;
-  }
-
-  .stopwatch-grid {
-    flex: 1;
-    overflow-y: auto;
-    padding: 16px 20px 76px;
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
-    align-content: start;
-    gap: 16px;
-  }
-
-  .fab-bar {
-    position: fixed;
-    right: 20px;
-    bottom: 20px;
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    padding: 4px;
-    background-color: var(--bg-fab);
-    border: 1px solid var(--border-control);
-    border-radius: 8px;
-    z-index: 20;
-  }
-
-  .fab-btn {
-    width: 36px;
-    height: 36px;
-    border: none;
-    border-radius: 6px;
-    background-color: transparent;
-    color: var(--text-primary);
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    transition:
-      background-color 120ms ease,
-      color 120ms ease;
-  }
-
-  .fab-btn:hover:not(:disabled) {
-    background-color: var(--bg-control-hover);
-    color: var(--text-strong);
-  }
-
-  .fab-btn:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-  }
-
-  .fab-btn-active {
-    background-color: var(--bg-control);
-    color: var(--text-strong);
-  }
-
-  .fab-btn-active:hover:not(:disabled) {
-    background-color: var(--bg-control-hover);
-  }
-
-  .empty-state {
-    flex: 1;
-    padding: 32px 20px 64px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    text-align: center;
-    user-select: none;
-  }
-
-  .empty-icon {
-    color: var(--text-secondary);
-    margin-bottom: 4px;
-  }
-
-  .empty-title {
-    margin: 0;
-    font-size: 1.0625rem;
-    font-weight: 600;
-    color: var(--text-primary);
-  }
-
-  .empty-subtext {
-    margin: 0;
-    font-size: 0.8125rem;
-    color: var(--text-muted);
-  }
-</style>

@@ -1,4 +1,4 @@
-<script lang="ts">
+﻿<script lang="ts">
   import { tick } from "svelte";
   import type { StopwatchDto } from "../api";
   import { computeElapsedMs, formatElapsed } from "../time";
@@ -15,6 +15,7 @@
     onRename: (id: number, name: string) => Promise<boolean> | boolean;
     onDelete: (id: number) => Promise<void> | void;
     onFocus?: (id: number) => void;
+    onMaximize?: (id: number) => void;
   }
 
   let {
@@ -27,6 +28,7 @@
     onRename,
     onDelete,
     onFocus,
+    onMaximize,
   }: Props = $props();
 
   let isEditing = $state(false);
@@ -258,6 +260,31 @@
               <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
             </svg>
           </button>
+        {:else if onMaximize}
+          <button
+            type="button"
+            class="btn-icon-ghost"
+            onclick={() => onMaximize(stopwatch.id)}
+            aria-label="Maximize stopwatch {stopwatch.name}"
+            title="Maximize"
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <polyline points="15 3 21 3 21 9" />
+              <polyline points="9 21 3 21 3 15" />
+              <line x1="21" y1="3" x2="14" y2="10" />
+              <line x1="3" y1="21" x2="10" y2="14" />
+            </svg>
+          </button>
         {/if}
       </div>
     {/if}
@@ -367,293 +394,3 @@
   {/if}
 </article>
 
-<style>
-  .stopwatch-card {
-    background-color: var(--bg-card);
-    border: 1px solid var(--border-card);
-    border-radius: 10px;
-    padding: 14px 18px 20px;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    gap: 18px;
-    min-width: 0;
-  }
-
-  .card-header {
-    display: flex;
-    align-items: center;
-    min-width: 0;
-    min-height: 32px;
-  }
-
-  .header-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    width: 100%;
-    min-width: 0;
-  }
-
-  .name-row {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    min-width: 0;
-    flex: 1;
-  }
-
-  .stopwatch-name {
-    margin: 0;
-    font-size: 1.0625rem;
-    font-weight: 600;
-    color: var(--text-primary);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    cursor: pointer;
-    user-select: none;
-    min-width: 0;
-  }
-
-  .rename-row {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    width: 100%;
-    min-width: 0;
-    min-height: 32px;
-  }
-
-  .rename-input {
-    flex: 1;
-    min-width: 0;
-    width: 100%;
-    background-color: var(--bg-app);
-    color: var(--text-primary);
-    border: 1px solid var(--border-strong);
-    border-radius: 6px;
-    padding: 6px 10px;
-    font-size: 0.9375rem;
-    font-family: inherit;
-    outline: none;
-    transition: border-color 120ms ease;
-  }
-
-  .rename-input:focus-visible {
-    border-color: var(--text-muted);
-  }
-
-  .time-display {
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-    font-variant-numeric: tabular-nums;
-    font-feature-settings: "tnum" 1;
-    font-size: 1.625rem;
-    font-weight: 700;
-    line-height: 1.15;
-    letter-spacing: -0.02em;
-    color: var(--text-muted);
-    user-select: none;
-    white-space: nowrap;
-    text-align: center;
-  }
-
-  .time-display[data-status="running"] {
-    color: var(--text-strong);
-  }
-
-  .time-display[data-status="paused"] {
-    color: var(--text-secondary);
-  }
-
-  .time-tenths {
-    font-size: 1.05rem;
-    font-weight: 500;
-    color: var(--text-dim);
-  }
-
-  .time-display[data-status="running"] .time-tenths {
-    color: var(--text-muted);
-  }
-
-  .controls-row {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-  }
-
-  button {
-    font-family: inherit;
-    cursor: pointer;
-    transition:
-      background-color 120ms ease,
-      color 120ms ease,
-      border-color 120ms ease;
-  }
-
-  button:disabled {
-    opacity: 0.35;
-    cursor: not-allowed;
-  }
-
-  .btn-circle-primary {
-    width: 42px;
-    height: 42px;
-    border-radius: 50%;
-    background-color: var(--accent-bg);
-    color: var(--accent-fg);
-    border: 1px solid var(--accent-bg);
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0;
-    flex-shrink: 0;
-  }
-
-  .btn-circle-primary:hover:not(:disabled) {
-    background-color: var(--accent-bg-hover);
-    border-color: var(--accent-bg-hover);
-  }
-
-  .btn-circle-primary[data-status="running"] {
-    background-color: var(--bg-control);
-    color: var(--text-primary);
-    border: 1px solid var(--border-strong);
-  }
-
-  .btn-circle-primary[data-status="running"]:hover:not(:disabled) {
-    background-color: var(--bg-control-hover);
-    border-color: var(--border-strong);
-  }
-
-  .btn-circle-secondary {
-    width: 38px;
-    height: 38px;
-    border-radius: 50%;
-    background-color: var(--bg-control);
-    color: var(--text-secondary);
-    border: 1px solid var(--border-control);
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0;
-    flex-shrink: 0;
-  }
-
-  .btn-circle-secondary:hover:not(:disabled) {
-    background-color: var(--bg-control-hover);
-    color: var(--text-strong);
-    border-color: var(--border-strong);
-  }
-
-  .btn-icon-ghost {
-    width: 26px;
-    height: 26px;
-    border-radius: 6px;
-    background-color: transparent;
-    color: var(--text-muted);
-    border: none;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0;
-    flex-shrink: 0;
-  }
-
-  .btn-icon-ghost:hover {
-    background-color: transparent;
-    color: var(--text-primary);
-  }
-
-  .btn-delete-trigger:hover {
-    color: var(--danger-fg);
-  }
-
-  .btn-inline {
-    width: 30px;
-    height: 30px;
-    border-radius: 6px;
-    background-color: var(--bg-control);
-    color: var(--text-secondary);
-    border: 1px solid var(--border-control);
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0;
-    flex-shrink: 0;
-  }
-
-  .btn-inline:hover {
-    background-color: var(--bg-control-hover);
-    color: var(--text-strong);
-    border-color: var(--border-strong);
-  }
-
-  .btn-inline-save {
-    background-color: var(--accent-bg);
-    color: var(--accent-fg);
-    border-color: var(--accent-bg);
-  }
-
-  .btn-inline-save:hover {
-    background-color: var(--accent-bg-hover);
-    color: var(--accent-fg);
-    border-color: var(--accent-bg-hover);
-  }
-
-  .confirm-bar {
-    display: flex;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 8px;
-    background-color: var(--bg-app);
-    border: 1px solid var(--border-card);
-    border-radius: 8px;
-    padding: 10px 12px;
-  }
-
-  .confirm-text {
-    font-size: 0.8125rem;
-    color: var(--text-primary);
-  }
-
-  .confirm-actions {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 8px;
-  }
-
-  .btn-confirm-danger {
-    background-color: var(--bg-control);
-    color: var(--danger-fg);
-    border: 1px solid var(--border-control);
-    border-radius: 6px;
-    padding: 5px 12px;
-    font-size: 0.75rem;
-    font-weight: 600;
-  }
-
-  .btn-confirm-danger:hover {
-    background-color: var(--bg-control-hover);
-    border-color: var(--border-strong);
-  }
-
-  .btn-confirm-cancel {
-    background-color: var(--bg-control);
-    color: var(--text-secondary);
-    border: 1px solid var(--border-control);
-    border-radius: 6px;
-    padding: 5px 12px;
-    font-size: 0.75rem;
-    font-weight: 500;
-  }
-
-  .btn-confirm-cancel:hover {
-    background-color: var(--bg-control-hover);
-    color: var(--text-strong);
-    border-color: var(--border-strong);
-  }
-</style>
