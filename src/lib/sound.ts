@@ -1,4 +1,117 @@
 let audioCtx: AudioContext | null = null;
+let activeAudio: HTMLAudioElement | null = null;
+let activeAudioUrl: string | null = null;
+
+/**
+ * Menghentikan pemutaran nada dering custom yang sedang berjalan.
+ */
+export function stopCustomRingtone(): void {
+  if (activeAudio) {
+    activeAudio.pause();
+    activeAudio.currentTime = 0;
+    activeAudio.src = "";
+    activeAudio = null;
+  }
+  if (activeAudioUrl) {
+    URL.revokeObjectURL(activeAudioUrl);
+    activeAudioUrl = null;
+  }
+}
+
+/**
+ * Memutar rentang waktu tertentu [startSec, endSec] dari file audio untuk preview trim.
+ */
+export function playAudioRangePreview(
+  blob: Blob,
+  startSec: number,
+  endSec: number,
+  onEnded?: () => void
+): boolean {
+  try {
+    stopCustomRingtone();
+    const url = URL.createObjectURL(blob);
+    const audio = new Audio(url);
+    activeAudio = audio;
+    activeAudioUrl = url;
+
+    const handleFinish = () => {
+      audio.removeEventListener("timeupdate", onTimeUpdate);
+      if (activeAudio === audio) {
+        stopCustomRingtone();
+      } else {
+        URL.revokeObjectURL(url);
+      }
+      onEnded?.();
+    };
+
+    const onTimeUpdate = () => {
+      if (audio.currentTime >= endSec) {
+        handleFinish();
+      }
+    };
+
+    audio.addEventListener("timeupdate", onTimeUpdate);
+    audio.addEventListener("ended", handleFinish, { once: true });
+    audio.addEventListener("error", handleFinish, { once: true });
+    audio.addEventListener(
+      "loadedmetadata",
+      () => {
+        audio.currentTime = Math.max(0, startSec);
+        void audio.play().catch(handleFinish);
+      },
+      { once: true }
+    );
+
+    return true;
+  } catch {
+    stopCustomRingtone();
+    onEnded?.();
+    return false;
+  }
+}
+
+/**
+ * Memutar file audio custom dari Blob. Mengembalikan true jika berhasil memulai pemutaran.
+ */
+export function playCustomRingtone(blob: Blob, onEnded?: () => void): boolean {
+  try {
+    stopCustomRingtone();
+    const url = URL.createObjectURL(blob);
+    const audio = new Audio(url);
+    activeAudio = audio;
+    activeAudioUrl = url;
+
+    const handleFinish = () => {
+      if (activeAudio === audio) {
+        stopCustomRingtone();
+      } else {
+        URL.revokeObjectURL(url);
+      }
+      onEnded?.();
+    };
+
+    audio.addEventListener("ended", handleFinish, { once: true });
+    audio.addEventListener(
+      "error",
+      () => {
+        handleFinish();
+        playTimerChime();
+      },
+      { once: true }
+    );
+
+    void audio.play().catch(() => {
+      handleFinish();
+      playTimerChime();
+    });
+    return true;
+  } catch {
+    stopCustomRingtone();
+    playTimerChime();
+    onEnded?.();
+    return false;
+  }
+}
 
 /**
  * Memainkan nada notifikasi singkat menggunakan Web Audio API saat timer selesai.

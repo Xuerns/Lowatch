@@ -1,3 +1,18 @@
+import {
+  clearCustomRingtone,
+  extractWaveformPeaks,
+  loadCustomRingtone,
+  saveCustomRingtone,
+  trimAudioFileToWav,
+  validateAndInspectAudioFile,
+} from "../ringtoneStorage";
+import {
+  playAudioRangePreview,
+  playCustomRingtone,
+  playTimerChime,
+  stopCustomRingtone,
+} from "../sound";
+
 const STORAGE_KEY = "lowatch.settings.v1";
 
 export type ThemeMode = "dark" | "light" | "system";
@@ -75,6 +90,21 @@ class SettingsStore {
   showStopwatchTenths = $state<boolean>(DEFAULT_SETTINGS.showStopwatchTenths);
   confirmStopwatchReset = $state<boolean>(DEFAULT_SETTINGS.confirmStopwatchReset);
   defaultTimerDurationMs = $state<number>(DEFAULT_SETTINGS.defaultTimerDurationMs);
+  customRingtoneName = $state<string | null>(null);
+  customRingtoneDurationSec = $state<number | null>(null);
+  customRingtoneSize = $state<number | null>(null);
+  ringtoneError = $state<string | null>(null);
+  isRingtoneLoading = $state<boolean>(false);
+  isPreviewPlaying = $state<boolean>(false);
+  isNotificationPlaying = $state<boolean>(false);
+  activeNotificationTimerName = $state<string | null>(null);
+  pendingTrimFile = $state<File | null>(null);
+  pendingTrimDurationSec = $state<number>(0);
+  pendingTrimPeaks = $state<number[]>([]);
+  isTrimPreviewPlaying = $state<boolean>(false);
+  isTrimSaving = $state<boolean>(false);
+
+  #customRingtoneBlob: Blob | null = null;
 
   constructor() {
     const initial = loadInitialSettings();
@@ -87,13 +117,30 @@ class SettingsStore {
     this.defaultTimerDurationMs = initial.defaultTimerDurationMs;
     this.#applyTheme();
 
-    if (typeof window !== "undefined" && typeof window.matchMedia === "function") {
-      const mq = window.matchMedia("(prefers-color-scheme: light)");
-      mq.addEventListener("change", () => {
-        if (this.theme === "system") {
-          this.#applyTheme();
-        }
-      });
+    if (typeof window !== "undefined") {
+      void this.#loadRingtone();
+      if (typeof window.matchMedia === "function") {
+        const mq = window.matchMedia("(prefers-color-scheme: light)");
+        mq.addEventListener("change", () => {
+          if (this.theme === "system") {
+            this.#applyTheme();
+          }
+        });
+      }
+    }
+  }
+
+  async #loadRingtone(): Promise<void> {
+    try {
+      const rec = await loadCustomRingtone();
+      if (rec) {
+        this.customRingtoneName = rec.name;
+        this.customRingtoneDurationSec = rec.durationSec;
+        this.customRingtoneSize = rec.size;
+        this.#customRingtoneBlob = rec.blob;
+      }
+    } catch {
+      // Ignore IndexedDB unavailability
     }
   }
 
@@ -175,6 +222,153 @@ class SettingsStore {
     if (durationMs < 1_000) return;
     this.defaultTimerDurationMs = durationMs;
     this.#persist();
+  }
+
+  clearRingtoneError(): void {
+    this.ringtoneError = null;
+  }
+
+  async uploadCustomRingtone(file: File): Promise<"saved" | "needs_trim" | "error"> {
+    this.ringtoneError = null;
+    this.isRingtoneLoading = true;
+    this.stopPreview();
+    this.stopTrimPreview();
+    try {
+      const { durationSec, needsTrim } = await validateAndInspectAudioFile(file);
+      if (needsTrim) {
+        this.pendingTrimFile = file;
+        this.pendingTrimDurationSec = durationSec;
+        this.pendingTrimPeaks = await extractWaveformPeaks(file, 96);
+        return "needs_trim";
+      }
+      const saved = await saveCustomRingtone(file, durationSec);
+      this.customRingtoneName = saved.name;
+      this.customRingtoneDurationSec = saved.durationSec;
+      this.customRingtoneSize = saved.size;
+      this.#customRingtoneBlob = saved.blob;
+      this.pendingTrimFile = null;
+      this.pendingTrimDurationSec = 0;
+      this.pendingTrimPeaks = [];
+      return "saved";
+    } catch (err) {
+      this.ringtoneError = err instanceof Error ? err.message : String(err);
+      return "error";
+    } finally {
+      this.isRingtoneLoading = false;
+    }
+  }
+
+  cancelTrim(): void {
+    this.stopTrimPreview();
+    this.pendingTrimFile = null;
+    this.pendingTrimDurationSec = 0;
+    this.pendingTrimPeaks = [];
+    this.ringtoneError = null;
+  }
+
+  stopTrimPreview(): void {
+    if (this.isTrimPreviewPlaying) {
+      stopCustomRingtone();
+      this.isTrimPreviewPlaying = false;
+    }
+  }
+
+  toggleTrimPreview(startSec: number, endSec: number): void {
+    if (this.isTrimPreviewPlaying) {
+      this.stopTrimPreview();
+      return;
+    }
+    if (!this.pendingTrimFile) return;
+    this.stopPreview();
+    this.isTrimPreviewPlaying = true;
+    playAudioRangePreview(this.pendingTrimFile, startSec, endSec, () => {
+      this.isTrimPreviewPlaying = false;
+    });
+  }
+
+  async confirmTrimAndSave(startSec: number, endSec: number): Promise<boolean> {
+    if (!this.pendingTrimFile || this.isTrimSaving) return false;
+    this.ringtoneError = null;
+    this.isTrimSaving = true;
+    this.stopTrimPreview();
+    try {
+      const { trimmedFile, durationSec } = await trimAudioFileToWav(
+        this.pendingTrimFile,
+        startSec,
+        endSec
+      );
+      const saved = await saveCustomRingtone(trimmedFile, durationSec);
+      this.customRingtoneName = saved.name;
+      this.customRingtoneDurationSec = saved.durationSec;
+      this.customRingtoneSize = saved.size;
+      this.#customRingtoneBlob = saved.blob;
+      this.pendingTrimFile = null;
+      this.pendingTrimDurationSec = 0;
+      this.pendingTrimPeaks = [];
+      return true;
+    } catch (err) {
+      this.ringtoneError = err instanceof Error ? err.message : String(err);
+      return false;
+    } finally {
+      this.isTrimSaving = false;
+    }
+  }
+
+  async resetCustomRingtone(): Promise<void> {
+    this.ringtoneError = null;
+    this.stopPreview();
+    try {
+      await clearCustomRingtone();
+    } catch {
+      // Ignore storage clear errors
+    } finally {
+      this.customRingtoneName = null;
+      this.customRingtoneDurationSec = null;
+      this.customRingtoneSize = null;
+      this.#customRingtoneBlob = null;
+    }
+  }
+
+  stopPreview(): void {
+    stopCustomRingtone();
+    this.isPreviewPlaying = false;
+  }
+
+  togglePreviewRingtone(): void {
+    if (this.isPreviewPlaying) {
+      this.stopPreview();
+      return;
+    }
+    if (this.#customRingtoneBlob) {
+      this.isPreviewPlaying = true;
+      playCustomRingtone(this.#customRingtoneBlob, () => {
+        this.isPreviewPlaying = false;
+      });
+    } else {
+      playTimerChime();
+    }
+  }
+
+  stopTimerNotification(): void {
+    stopCustomRingtone();
+    this.isNotificationPlaying = false;
+    this.activeNotificationTimerName = null;
+  }
+
+  playTimerNotification(timerName?: string): void {
+    if (!this.timerSoundEnabled) return;
+    this.stopPreview();
+    this.stopTrimPreview();
+    if (this.#customRingtoneBlob) {
+      this.isNotificationPlaying = true;
+      this.activeNotificationTimerName = timerName ?? null;
+      playCustomRingtone(this.#customRingtoneBlob, () => {
+        this.isNotificationPlaying = false;
+        this.activeNotificationTimerName = null;
+      });
+    } else {
+      playTimerChime();
+    }
   }
 }
 

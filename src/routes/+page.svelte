@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { fly } from "svelte/transition";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import FocusView from "$lib/components/FocusView.svelte";
   import SettingsView from "$lib/components/SettingsView.svelte";
@@ -204,6 +205,56 @@
       />
 
       <div class="content-area">
+        {#if settingsStore.isNotificationPlaying}
+          <div
+            class="notification-banner"
+            role="status"
+            aria-live="polite"
+            transition:fly={{ y: -16, duration: 200 }}
+          >
+            <svg
+              class="notification-icon"
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.9"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+              <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+              <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+            </svg>
+            <div class="notification-copy">
+              <span class="notification-title">
+                {settingsStore.activeNotificationTimerName
+                  ? `${settingsStore.activeNotificationTimerName} finished`
+                  : "Timer finished"}
+              </span>
+              <span class="notification-sub">Ringtone playing</span>
+            </div>
+            <button
+              type="button"
+              class="btn-stop-sound"
+              onclick={() => settingsStore.stopTimerNotification()}
+            >
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+                aria-hidden="true"
+              >
+                <rect x="4" y="4" width="16" height="16" rx="2" />
+              </svg>
+              <span>Stop</span>
+            </button>
+          </div>
+        {/if}
+
         {#if activeErrorMessage !== null}
           <div class="error-banner" role="alert">
             <span class="error-text">{activeErrorMessage}</span>
@@ -535,6 +586,74 @@
     color: var(--text-strong);
   }
 
+  .notification-banner {
+    position: absolute;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 25;
+    padding: 10px 14px;
+    min-width: 280px;
+    max-width: calc(100% - 32px);
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-strong);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .notification-icon {
+    color: var(--text-primary);
+    flex-shrink: 0;
+  }
+
+  .notification-copy {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+
+  .notification-title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .notification-sub {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+  }
+
+  .btn-stop-sound {
+    background-color: var(--accent-bg);
+    color: var(--accent-fg);
+    border: 1px solid var(--accent-bg);
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-family: inherit;
+    font-size: 0.75rem;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition:
+      background-color 120ms ease,
+      border-color 120ms ease;
+  }
+
+  .btn-stop-sound:hover {
+    background-color: var(--accent-bg-hover);
+    border-color: var(--accent-bg-hover);
+  }
+
   .workspace {
     display: flex;
     flex: 1;
@@ -544,6 +663,7 @@
   }
 
   .content-area {
+    position: relative;
     flex: 1;
     display: flex;
     flex-direction: column;

@@ -11,7 +11,6 @@ import {
   deleteTimer,
 } from "../api";
 import { computeRemainingMs } from "../time";
-import { playTimerChime } from "../sound";
 import { settingsStore } from "./settings.svelte";
 
 class TimerStore {
@@ -59,9 +58,7 @@ class TimerStore {
     try {
       const updated = await completeTimer(id);
       this.#replaceItem(updated);
-      if (settingsStore.timerSoundEnabled) {
-        playTimerChime();
-      }
+      settingsStore.playTimerNotification(updated.name);
     } catch (err) {
       this.setError(err);
     } finally {
@@ -139,6 +136,7 @@ class TimerStore {
   }
 
   async start(id: number): Promise<void> {
+    settingsStore.stopTimerNotification();
     try {
       const updated = await startTimer(id);
       this.#replaceItem(updated);
@@ -157,6 +155,7 @@ class TimerStore {
   }
 
   async reset(id: number): Promise<void> {
+    settingsStore.stopTimerNotification();
     try {
       const updated = await resetTimer(id);
       this.#replaceItem(updated);
@@ -166,6 +165,7 @@ class TimerStore {
   }
 
   async remove(id: number): Promise<void> {
+    settingsStore.stopTimerNotification();
     try {
       await deleteTimer(id);
       this.items = this.items.filter((it) => it.id !== id);

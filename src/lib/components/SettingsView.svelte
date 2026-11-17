@@ -1,5 +1,14 @@
 <script lang="ts">
+  import AudioWaveformTrimmer from "./AudioWaveformTrimmer.svelte";
+  import {
+    MAX_RINGTONE_DURATION_SEC,
+    formatFileSize,
+  } from "../ringtoneStorage";
   import { settingsStore, type ThemeMode } from "../stores/settings.svelte";
+
+  let fileInputEl = $state<HTMLInputElement | null>(null);
+  let trimStartSec = $state(0);
+  let trimEndSec = $state(MAX_RINGTONE_DURATION_SEC);
 
   const THEME_OPTIONS: { label: string; value: ThemeMode }[] = [
     { label: "Dark", value: "dark" },
@@ -15,6 +24,39 @@
     { label: "25 min", ms: 25 * 60_000 },
     { label: "1 hour", ms: 60 * 60_000 },
   ];
+
+  function formatSec(sec: number): string {
+    const safe = Math.max(0, sec);
+    const mins = Math.floor(safe / 60);
+    const rem = (safe % 60).toFixed(1).padStart(4, "0");
+    return `${String(mins).padStart(2, "0")}:${rem}`;
+  }
+
+  function handleChooseRingtone(): void {
+    settingsStore.clearRingtoneError();
+    fileInputEl?.click();
+  }
+
+  async function handleFileSelected(event: Event): Promise<void> {
+    const input = event.currentTarget as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = "";
+    if (!file) return;
+    const result = await settingsStore.uploadCustomRingtone(file);
+    if (result === "needs_trim") {
+      trimStartSec = 0;
+      trimEndSec = Math.min(
+        MAX_RINGTONE_DURATION_SEC,
+        settingsStore.pendingTrimDurationSec
+      );
+    }
+  }
+
+  function handleTrimRangeChange(nextStart: number, nextEnd: number): void {
+    trimStartSec = nextStart;
+    trimEndSec = nextEnd;
+    settingsStore.stopTrimPreview();
+  }
 </script>
 
 <section class="settings-page" aria-label="Settings">
@@ -152,6 +194,113 @@
           >
             <span class="toggle-thumb"></span>
           </button>
+        </div>
+
+        <div class="setting-row setting-row-col setting-row-divider">
+          <div class="setting-info">
+            <span class="setting-label">Ringtone</span>
+            <span class="setting-desc">
+              {#if settingsStore.customRingtoneName !== null}
+                {settingsStore.customRingtoneName}
+                {#if settingsStore.customRingtoneDurationSec !== null && settingsStore.customRingtoneSize !== null}
+                  ({Math.ceil(settingsStore.customRingtoneDurationSec)}s · {formatFileSize(settingsStore.customRingtoneSize)})
+                {/if}
+              {:else}
+                Default chime (MP3, WAV, OGG, M4A · Max 10 MB · Clip up to 30s)
+              {/if}
+            </span>
+          </div>
+
+          <input
+            bind:this={fileInputEl}
+            type="file"
+            accept=".mp3,.wav,.ogg,.m4a,audio/mpeg,audio/wav,audio/ogg,audio/mp4"
+            class="sr-only-input"
+            onchange={handleFileSelected}
+          />
+
+          <div class="ringtone-actions">
+            <button
+              type="button"
+              class="option-btn"
+              disabled={settingsStore.isRingtoneLoading || settingsStore.isTrimSaving}
+              onclick={handleChooseRingtone}
+            >
+              {settingsStore.isRingtoneLoading ? "Checking..." : "Choose audio"}
+            </button>
+            <button
+              type="button"
+              class="option-btn"
+              onclick={() => settingsStore.togglePreviewRingtone()}
+            >
+              {settingsStore.isPreviewPlaying ? "Stop" : "Test"}
+            </button>
+            {#if settingsStore.customRingtoneName !== null}
+              <button
+                type="button"
+                class="option-btn"
+                onclick={() => settingsStore.resetCustomRingtone()}
+              >
+                Reset
+              </button>
+            {/if}
+          </div>
+
+          {#if settingsStore.pendingTrimFile !== null}
+            <div class="trim-panel" role="region" aria-label="Trim audio clip">
+              <div class="trim-header">
+                <span class="trim-title">
+                  Trim "{settingsStore.pendingTrimFile.name}" (Total {formatSec(settingsStore.pendingTrimDurationSec)})
+                </span>
+                <span class="trim-badge">
+                  {(trimEndSec - trimStartSec).toFixed(1)}s / 30s
+                </span>
+              </div>
+
+              <AudioWaveformTrimmer
+                peaks={settingsStore.pendingTrimPeaks}
+                totalDurationSec={settingsStore.pendingTrimDurationSec}
+                startSec={trimStartSec}
+                endSec={trimEndSec}
+                onChange={handleTrimRangeChange}
+              />
+
+              <div class="trim-range-meta">
+                <span class="trim-time">{formatSec(trimStartSec)}</span>
+                <span class="trim-time">{formatSec(trimEndSec)}</span>
+              </div>
+
+              <div class="ringtone-actions">
+                <button
+                  type="button"
+                  class="option-btn"
+                  onclick={() => settingsStore.toggleTrimPreview(trimStartSec, trimEndSec)}
+                >
+                  {settingsStore.isTrimPreviewPlaying ? "Stop preview" : "Preview selection"}
+                </button>
+                <button
+                  type="button"
+                  class="option-btn option-btn-active"
+                  disabled={settingsStore.isTrimSaving}
+                  onclick={() => settingsStore.confirmTrimAndSave(trimStartSec, trimEndSec)}
+                >
+                  {settingsStore.isTrimSaving ? "Trimming..." : "Save clip"}
+                </button>
+                <button
+                  type="button"
+                  class="option-btn"
+                  disabled={settingsStore.isTrimSaving}
+                  onclick={() => settingsStore.cancelTrim()}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          {/if}
+
+          {#if settingsStore.ringtoneError !== null}
+            <p class="ringtone-error" role="alert">{settingsStore.ringtoneError}</p>
+          {/if}
         </div>
 
         <div class="setting-row setting-row-col setting-row-divider">
@@ -389,5 +538,70 @@
     width: 100%;
     accent-color: var(--accent-bg);
     cursor: pointer;
+  }
+
+  .sr-only-input {
+    display: none;
+  }
+
+  .ringtone-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .ringtone-error {
+    margin: 0;
+    font-size: 0.8125rem;
+    color: var(--danger-fg);
+  }
+
+  .trim-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 12px;
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border-card);
+    border-radius: 8px;
+  }
+
+  .trim-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .trim-title {
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--text-primary);
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .trim-badge {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    flex-shrink: 0;
+  }
+
+  .trim-range-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .trim-time {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+    font-size: 0.75rem;
+    color: var(--text-primary);
   }
 </style>
