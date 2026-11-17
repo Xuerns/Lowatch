@@ -12,6 +12,7 @@ import {
 } from "../api";
 import { computeRemainingMs } from "../time";
 import { playTimerChime } from "../sound";
+import { settingsStore } from "./settings.svelte";
 
 class TimerStore {
   items = $state<TimerDto[]>([]);
@@ -58,7 +59,9 @@ class TimerStore {
     try {
       const updated = await completeTimer(id);
       this.#replaceItem(updated);
-      playTimerChime();
+      if (settingsStore.timerSoundEnabled) {
+        playTimerChime();
+      }
     } catch (err) {
       this.setError(err);
     } finally {

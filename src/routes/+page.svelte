@@ -2,9 +2,11 @@
   import { onMount } from "svelte";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import FocusView from "$lib/components/FocusView.svelte";
+  import SettingsView from "$lib/components/SettingsView.svelte";
   import Sidebar, { type AppPage } from "$lib/components/Sidebar.svelte";
   import StopwatchCard from "$lib/components/StopwatchCard.svelte";
   import TimerCard from "$lib/components/TimerCard.svelte";
+  import { settingsStore } from "$lib/stores/settings.svelte";
   import { stopwatchStore } from "$lib/stores/stopwatches.svelte";
   import { timerStore } from "$lib/stores/timers.svelte";
 
@@ -17,7 +19,11 @@
   let isEditMode = $state(false);
 
   let activeErrorMessage = $derived(
-    activePage === "stopwatch" ? stopwatchStore.errorMessage : timerStore.errorMessage
+    activePage === "stopwatch"
+      ? stopwatchStore.errorMessage
+      : activePage === "timer"
+        ? timerStore.errorMessage
+        : null
   );
 
   onMount(() => {
@@ -72,8 +78,8 @@
     try {
       if (activePage === "stopwatch") {
         await stopwatchStore.create();
-      } else {
-        await timerStore.create();
+      } else if (activePage === "timer") {
+        await timerStore.create(undefined, settingsStore.defaultTimerDurationMs);
       }
     } finally {
       isCreating = false;
@@ -255,6 +261,8 @@
               {/each}
             </section>
           {/if}
+        {:else if activePage === "settings"}
+          <SettingsView />
         {:else if timerStore.loading && timerStore.items.length === 0}
           <div class="empty-state">
             <p class="empty-subtext">Loading timers...</p>
@@ -301,11 +309,12 @@
       </div>
     </div>
 
-    <div
-      class="fab-bar"
-      role="toolbar"
-      aria-label={activePage === "stopwatch" ? "Stopwatch actions" : "Timer actions"}
-    >
+    {#if activePage !== "settings"}
+      <div
+        class="fab-bar"
+        role="toolbar"
+        aria-label={activePage === "stopwatch" ? "Stopwatch actions" : "Timer actions"}
+      >
       <button
         type="button"
         class="fab-btn"
@@ -379,6 +388,7 @@
         </svg>
       </button>
     </div>
+    {/if}
   </main>
 {/if}
 
@@ -388,14 +398,14 @@
     flex-direction: column;
     width: 100%;
     height: 100vh;
-    background-color: #202020;
-    color: #f5f5f5;
+    background-color: transparent;
+    color: var(--text-primary);
   }
 
   .titlebar {
     height: 36px;
     padding-left: 12px;
-    background-color: #202020;
+    background-color: var(--bg-app);
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -416,7 +426,7 @@
     border: none;
     border-radius: 6px;
     background-color: transparent;
-    color: #a3a3a3;
+    color: var(--text-muted);
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -429,8 +439,8 @@
   }
 
   .titlebar-toggle:hover {
-    background-color: rgba(255, 255, 255, 0.08);
-    color: #ffffff;
+    background-color: var(--bg-hover);
+    color: var(--text-strong);
   }
 
   .titlebar-brand {
@@ -451,7 +461,7 @@
   .titlebar-title {
     font-size: 0.8125rem;
     font-weight: 500;
-    color: #f5f5f5;
+    color: var(--text-primary);
     letter-spacing: -0.005em;
   }
 
@@ -467,7 +477,7 @@
     height: 100%;
     border: none;
     background-color: transparent;
-    color: #d4d4d4;
+    color: var(--text-secondary);
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -478,8 +488,8 @@
   }
 
   .win-btn:hover {
-    background-color: rgba(255, 255, 255, 0.08);
-    color: #ffffff;
+    background-color: var(--bg-hover);
+    color: var(--text-strong);
   }
 
   .win-btn-close:hover {
@@ -490,8 +500,8 @@
   .error-banner {
     margin: 12px 16px 0;
     padding: 10px 12px;
-    background-color: #2b2b2b;
-    border: 1px solid #383838;
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-card);
     border-radius: 6px;
     display: flex;
     align-items: center;
@@ -502,13 +512,13 @@
 
   .error-text {
     font-size: 0.8125rem;
-    color: #f87171;
+    color: var(--danger-fg);
   }
 
   .btn-dismiss {
-    background-color: #323232;
-    color: #d4d4d4;
-    border: 1px solid #404040;
+    background-color: var(--bg-control);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-control);
     border-radius: 6px;
     padding: 4px 10px;
     font-family: inherit;
@@ -521,8 +531,8 @@
   }
 
   .btn-dismiss:hover {
-    background-color: #3d3d3d;
-    color: #ffffff;
+    background-color: var(--bg-control-hover);
+    color: var(--text-strong);
   }
 
   .workspace {
@@ -530,13 +540,14 @@
     flex: 1;
     min-height: 0;
     min-width: 0;
-    border-top: 1px solid #303030;
+    border-top: 1px solid var(--border-subtle);
   }
 
   .content-area {
     flex: 1;
     display: flex;
     flex-direction: column;
+    background-color: var(--bg-app);
     min-width: 0;
     min-height: 0;
   }
@@ -559,8 +570,8 @@
     align-items: center;
     gap: 4px;
     padding: 4px;
-    background-color: #2d2d2d;
-    border: 1px solid #424242;
+    background-color: var(--bg-fab);
+    border: 1px solid var(--border-control);
     border-radius: 8px;
     z-index: 20;
   }
@@ -571,7 +582,7 @@
     border: none;
     border-radius: 6px;
     background-color: transparent;
-    color: #e5e5e5;
+    color: var(--text-primary);
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -582,8 +593,8 @@
   }
 
   .fab-btn:hover:not(:disabled) {
-    background-color: #3a3a3a;
-    color: #ffffff;
+    background-color: var(--bg-control-hover);
+    color: var(--text-strong);
   }
 
   .fab-btn:disabled {
@@ -592,12 +603,12 @@
   }
 
   .fab-btn-active {
-    background-color: #404040;
-    color: #ffffff;
+    background-color: var(--bg-control);
+    color: var(--text-strong);
   }
 
   .fab-btn-active:hover:not(:disabled) {
-    background-color: #4a4a4a;
+    background-color: var(--bg-control-hover);
   }
 
   .empty-state {
@@ -613,7 +624,7 @@
   }
 
   .empty-icon {
-    color: #d4d4d4;
+    color: var(--text-secondary);
     margin-bottom: 4px;
   }
 
@@ -621,12 +632,12 @@
     margin: 0;
     font-size: 1.0625rem;
     font-weight: 600;
-    color: #f5f5f5;
+    color: var(--text-primary);
   }
 
   .empty-subtext {
     margin: 0;
     font-size: 0.8125rem;
-    color: #8a8a8a;
+    color: var(--text-muted);
   }
 </style>

@@ -115,8 +115,8 @@
     height: 100vh;
     box-sizing: border-box;
     overflow: hidden;
-    background-color: #202020;
-    border: 1px solid #383838;
+    background-color: var(--bg-app);
+    border: 1px solid var(--border-card);
     padding: 10px 12px 12px;
     display: flex;
     flex-direction: column;
@@ -142,7 +142,7 @@
     min-width: 0;
     font-size: 0.8125rem;
     font-weight: 600;
-    color: #a3a3a3;
+    color: var(--text-muted);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -151,7 +151,7 @@
 
   .btn-exit {
     background-color: transparent;
-    color: #737373;
+    color: var(--text-dim);
     border: 1px solid transparent;
     border-radius: 6px;
     width: 24px;
@@ -172,9 +172,9 @@
   }
 
   .btn-exit:hover {
-    background-color: #171717;
-    color: #f5f5f5;
-    border-color: #262626;
+    background-color: var(--bg-hover);
+    color: var(--text-primary);
+    border-color: var(--border-subtle);
   }
 
   .focus-body {
@@ -193,24 +193,24 @@
     font-weight: 700;
     line-height: 1.1;
     letter-spacing: -0.02em;
-    color: #a3a3a3;
+    color: var(--text-muted);
   }
 
   .focus-time[data-status="running"] {
-    color: #ffffff;
+    color: var(--text-strong);
   }
 
   .focus-time[data-status="paused"] {
-    color: #e5e5e5;
+    color: var(--text-secondary);
   }
 
   .btn-action {
     width: 32px;
     height: 32px;
     padding: 0;
-    background-color: #f5f5f5;
-    color: #202020;
-    border: 1px solid #f5f5f5;
+    background-color: var(--accent-bg);
+    color: var(--accent-fg);
+    border: 1px solid var(--accent-bg);
     border-radius: 50%;
     display: inline-flex;
     align-items: center;
@@ -224,18 +224,18 @@
   }
 
   .btn-action:hover {
-    background-color: #e5e5e5;
-    border-color: #e5e5e5;
+    background-color: var(--accent-bg-hover);
+    border-color: var(--accent-bg-hover);
   }
 
   .btn-action[data-status="running"] {
-    background-color: #363636;
-    color: #f5f5f5;
-    border: 1px solid #525252;
+    background-color: var(--bg-control);
+    color: var(--text-primary);
+    border: 1px solid var(--border-strong);
   }
 
   .btn-action[data-status="running"]:hover {
-    background-color: #424242;
-    border-color: #666666;
+    background-color: var(--bg-control-hover);
+    border-color: var(--border-strong);
   }
 </style>

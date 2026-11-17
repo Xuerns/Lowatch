@@ -1,5 +1,5 @@
 <script lang="ts">
-  export type AppPage = "stopwatch" | "timer";
+  export type AppPage = "stopwatch" | "timer" | "settings";
 
   interface Props {
     activePage: AppPage;
@@ -90,14 +90,46 @@
       {/if}
     </button>
   </nav>
+
+  <div class="sidebar-footer">
+    <button
+      type="button"
+      class="nav-item"
+      class:nav-item-active={activePage === "settings"}
+      onclick={() => onSelectPage("settings")}
+      aria-current={activePage === "settings" ? "page" : undefined}
+      title="Settings"
+    >
+      <svg
+        class="nav-icon"
+        width="17"
+        height="17"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+      >
+        <circle cx="12" cy="12" r="3" />
+        <path
+          d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"
+        />
+      </svg>
+      {#if !collapsed}
+        <span class="nav-label">Settings</span>
+      {/if}
+    </button>
+  </div>
 </aside>
 
 <style>
   .sidebar {
     width: 256px;
     flex-shrink: 0;
-    background-color: #1b1b1b;
-    border-right: 1px solid #303030;
+    background-color: var(--bg-sidebar);
+    border-right: 1px solid var(--border-subtle);
     display: flex;
     flex-direction: column;
     padding: 8px;
@@ -116,6 +148,16 @@
     flex-direction: column;
     gap: 4px;
     width: 100%;
+    flex: 1;
+  }
+
+  .sidebar-footer {
+    width: 100%;
+    padding-top: 8px;
+    border-top: 1px solid var(--border-subtle);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
   }
 
   .nav-item {
@@ -126,7 +168,7 @@
     border: 1px solid transparent;
     border-radius: 6px;
     background-color: transparent;
-    color: #a3a3a3;
+    color: var(--text-muted);
     font-family: inherit;
     font-size: 0.875rem;
     font-weight: 500;
@@ -149,18 +191,18 @@
   }
 
   .nav-item:hover {
-    background-color: #262626;
-    color: #f5f5f5;
+    background-color: var(--bg-hover);
+    color: var(--text-primary);
   }
 
   .nav-item-active {
-    background-color: #2b2b2b;
-    border-color: #383838;
-    color: #ffffff;
+    background-color: var(--bg-active-nav);
+    border-color: var(--border-card);
+    color: var(--text-strong);
   }
 
   .nav-item-active:hover {
-    background-color: #303030;
+    background-color: var(--bg-active-nav-hover);
   }
 
   .nav-icon {
@@ -180,8 +222,8 @@
     font-variant-numeric: tabular-nums;
     font-size: 0.75rem;
     font-weight: 600;
-    color: #d4d4d4;
-    background-color: #363636;
+    color: var(--text-secondary);
+    background-color: var(--bg-badge);
     border-radius: 4px;
     padding: 1px 6px;
     line-height: 1.4;

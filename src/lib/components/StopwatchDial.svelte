@@ -113,28 +113,28 @@
   }
 
   .tick {
-    stroke: #363636;
+    stroke: var(--dial-tick);
     stroke-width: 1.2;
     stroke-linecap: round;
     transition: stroke 150ms ease;
   }
 
   .tick-major {
-    stroke: #4a4a4a;
+    stroke: var(--dial-tick-major);
     stroke-width: 2;
   }
 
   .dial[data-status="running"] .tick-lit {
-    stroke: #d4d4d4;
+    stroke: var(--text-secondary);
   }
 
   .dial[data-status="paused"] .tick-lit {
-    stroke: #666666;
+    stroke: var(--dial-tick-lit-paused);
   }
 
   .dial-track {
     fill: none;
-    stroke: #303030;
+    stroke: var(--dial-track);
     stroke-width: 3;
   }
 
@@ -147,26 +147,26 @@
   }
 
   .dial[data-status="running"] .dial-progress {
-    stroke: #f5f5f5;
+    stroke: var(--text-primary);
   }
 
   .dial[data-status="paused"] .dial-progress {
-    stroke: #5e5e5e;
+    stroke: var(--dial-progress-paused);
   }
 
   .dial-hand {
-    fill: #4a4a4a;
-    stroke: #2b2b2b;
+    fill: var(--dial-hand-idle);
+    stroke: var(--bg-card);
     stroke-width: 2;
     transition: fill 150ms ease;
   }
 
   .dial[data-status="running"] .dial-hand {
-    fill: #ffffff;
+    fill: var(--text-strong);
   }
 
   .dial[data-status="paused"] .dial-hand {
-    fill: #7a7a7a;
+    fill: var(--dial-hand-paused);
   }
 
   .dial-content {

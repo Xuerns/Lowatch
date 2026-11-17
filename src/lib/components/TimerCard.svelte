@@ -481,8 +481,8 @@
 
 <style>
   .timer-card {
-    background-color: #2b2b2b;
-    border: 1px solid #383838;
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-card);
     border-radius: 10px;
     padding: 14px 18px 20px;
     display: flex;
@@ -520,7 +520,7 @@
     margin: 0;
     font-size: 1.0625rem;
     font-weight: 600;
-    color: #f5f5f5;
+    color: var(--text-primary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -542,9 +542,9 @@
     flex: 1;
     min-width: 0;
     width: 100%;
-    background-color: #202020;
-    color: #f5f5f5;
-    border: 1px solid #525252;
+    background-color: var(--bg-app);
+    color: var(--text-primary);
+    border: 1px solid var(--border-strong);
     border-radius: 6px;
     padding: 6px 10px;
     font-size: 0.9375rem;
@@ -554,7 +554,7 @@
   }
 
   .rename-input:focus-visible {
-    border-color: #a3a3a3;
+    border-color: var(--text-muted);
   }
 
   .time-display {
@@ -565,33 +565,33 @@
     font-weight: 700;
     line-height: 1.15;
     letter-spacing: -0.02em;
-    color: #a3a3a3;
+    color: var(--text-muted);
     user-select: none;
     white-space: nowrap;
     text-align: center;
   }
 
   .time-display[data-status="running"] {
-    color: #ffffff;
+    color: var(--text-strong);
   }
 
   .time-display[data-status="paused"] {
-    color: #e5e5e5;
+    color: var(--text-secondary);
   }
 
   .time-display[data-status="completed"] {
-    color: #f5f5f5;
+    color: var(--text-primary);
   }
 
   .status-note {
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
     font-size: 0.75rem;
-    color: #737373;
+    color: var(--text-dim);
     user-select: none;
   }
 
   .status-note-done {
-    color: #f87171;
+    color: var(--danger-fg);
     font-family: inherit;
     font-weight: 600;
   }
@@ -603,8 +603,8 @@
     align-items: center;
     justify-content: center;
     gap: 14px;
-    background-color: #242424;
-    border: 1px solid #383838;
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border-card);
     border-radius: 8px;
     padding: 14px;
   }
@@ -625,15 +625,15 @@
   .duration-unit {
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
     font-size: 0.6875rem;
-    color: #737373;
+    color: var(--text-dim);
     letter-spacing: 0.06em;
   }
 
   .duration-num {
     width: 52px;
-    background-color: #1b1b1b;
-    color: #f5f5f5;
-    border: 1px solid #404040;
+    background-color: var(--bg-app);
+    color: var(--text-primary);
+    border: 1px solid var(--border-control);
     border-radius: 6px;
     padding: 6px 4px;
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
@@ -644,14 +644,14 @@
   }
 
   .duration-num:focus-visible {
-    border-color: #a3a3a3;
+    border-color: var(--text-muted);
   }
 
   .duration-sep {
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
     font-size: 1.125rem;
     font-weight: 600;
-    color: #737373;
+    color: var(--text-dim);
     padding-bottom: 7px;
   }
 
@@ -663,9 +663,9 @@
   }
 
   .preset-btn {
-    background-color: #2b2b2b;
-    color: #d4d4d4;
-    border: 1px solid #3d3d3d;
+    background-color: var(--bg-card);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-card);
     border-radius: 6px;
     padding: 3px 8px;
     font-size: 0.75rem;
@@ -673,9 +673,9 @@
   }
 
   .preset-btn:hover {
-    background-color: #363636;
-    color: #ffffff;
-    border-color: #525252;
+    background-color: var(--bg-control-hover);
+    color: var(--text-strong);
+    border-color: var(--border-strong);
   }
 
   .duration-actions {
@@ -685,9 +685,9 @@
   }
 
   .btn-duration-save {
-    background-color: #f5f5f5;
-    color: #202020;
-    border: 1px solid #f5f5f5;
+    background-color: var(--accent-bg);
+    color: var(--accent-fg);
+    border: 1px solid var(--accent-bg);
     border-radius: 6px;
     padding: 5px 14px;
     font-size: 0.75rem;
@@ -695,8 +695,8 @@
   }
 
   .btn-duration-save:hover:not(:disabled) {
-    background-color: #e5e5e5;
-    border-color: #e5e5e5;
+    background-color: var(--accent-bg-hover);
+    border-color: var(--accent-bg-hover);
   }
 
   .controls-row {
@@ -724,9 +724,9 @@
     width: 42px;
     height: 42px;
     border-radius: 50%;
-    background-color: #f5f5f5;
-    color: #202020;
-    border: 1px solid #f5f5f5;
+    background-color: var(--accent-bg);
+    color: var(--accent-fg);
+    border: 1px solid var(--accent-bg);
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -735,28 +735,28 @@
   }
 
   .btn-circle-primary:hover:not(:disabled) {
-    background-color: #e5e5e5;
-    border-color: #e5e5e5;
+    background-color: var(--accent-bg-hover);
+    border-color: var(--accent-bg-hover);
   }
 
   .btn-circle-primary[data-status="running"] {
-    background-color: #363636;
-    color: #f5f5f5;
-    border: 1px solid #525252;
+    background-color: var(--bg-control);
+    color: var(--text-primary);
+    border: 1px solid var(--border-strong);
   }
 
   .btn-circle-primary[data-status="running"]:hover:not(:disabled) {
-    background-color: #424242;
-    border-color: #666666;
+    background-color: var(--bg-control-hover);
+    border-color: var(--border-strong);
   }
 
   .btn-circle-secondary {
     width: 38px;
     height: 38px;
     border-radius: 50%;
-    background-color: #323232;
-    color: #d4d4d4;
-    border: 1px solid #404040;
+    background-color: var(--bg-control);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-control);
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -765,9 +765,9 @@
   }
 
   .btn-circle-secondary:hover:not(:disabled) {
-    background-color: #3c3c3c;
-    color: #ffffff;
-    border-color: #525252;
+    background-color: var(--bg-control-hover);
+    color: var(--text-strong);
+    border-color: var(--border-strong);
   }
 
   .btn-icon-ghost {
@@ -775,7 +775,7 @@
     height: 26px;
     border-radius: 6px;
     background-color: transparent;
-    color: #8a8a8a;
+    color: var(--text-muted);
     border: none;
     display: inline-flex;
     align-items: center;
@@ -786,20 +786,20 @@
 
   .btn-icon-ghost:hover {
     background-color: transparent;
-    color: #e5e5e5;
+    color: var(--text-primary);
   }
 
   .btn-delete-trigger:hover {
-    color: #f87171;
+    color: var(--danger-fg);
   }
 
   .btn-inline {
     width: 30px;
     height: 30px;
     border-radius: 6px;
-    background-color: #323232;
-    color: #d4d4d4;
-    border: 1px solid #404040;
+    background-color: var(--bg-control);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-control);
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -808,21 +808,21 @@
   }
 
   .btn-inline:hover {
-    background-color: #3c3c3c;
-    color: #ffffff;
-    border-color: #525252;
+    background-color: var(--bg-control-hover);
+    color: var(--text-strong);
+    border-color: var(--border-strong);
   }
 
   .btn-inline-save {
-    background-color: #f5f5f5;
-    color: #202020;
-    border-color: #f5f5f5;
+    background-color: var(--accent-bg);
+    color: var(--accent-fg);
+    border-color: var(--accent-bg);
   }
 
   .btn-inline-save:hover {
-    background-color: #e5e5e5;
-    color: #202020;
-    border-color: #e5e5e5;
+    background-color: var(--accent-bg-hover);
+    color: var(--accent-fg);
+    border-color: var(--accent-bg-hover);
   }
 
   .confirm-bar {
@@ -830,15 +830,15 @@
     flex-direction: column;
     align-items: stretch;
     gap: 8px;
-    background-color: #202020;
-    border: 1px solid #383838;
+    background-color: var(--bg-app);
+    border: 1px solid var(--border-card);
     border-radius: 8px;
     padding: 10px 12px;
   }
 
   .confirm-text {
     font-size: 0.8125rem;
-    color: #e5e5e5;
+    color: var(--text-primary);
   }
 
   .confirm-actions {
@@ -849,9 +849,9 @@
   }
 
   .btn-confirm-danger {
-    background-color: #323232;
-    color: #f87171;
-    border: 1px solid #404040;
+    background-color: var(--bg-control);
+    color: var(--danger-fg);
+    border: 1px solid var(--border-control);
     border-radius: 6px;
     padding: 5px 12px;
     font-size: 0.75rem;
@@ -859,14 +859,14 @@
   }
 
   .btn-confirm-danger:hover {
-    background-color: #3c3c3c;
-    border-color: #525252;
+    background-color: var(--bg-control-hover);
+    border-color: var(--border-strong);
   }
 
   .btn-confirm-cancel {
-    background-color: #323232;
-    color: #d4d4d4;
-    border: 1px solid #404040;
+    background-color: var(--bg-control);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-control);
     border-radius: 6px;
     padding: 5px 12px;
     font-size: 0.75rem;
@@ -874,8 +874,8 @@
   }
 
   .btn-confirm-cancel:hover {
-    background-color: #3c3c3c;
-    color: #ffffff;
-    border-color: #525252;
+    background-color: var(--bg-control-hover);
+    color: var(--text-strong);
+    border-color: var(--border-strong);
   }
 </style>
