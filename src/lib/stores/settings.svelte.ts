@@ -17,6 +17,9 @@ const STORAGE_KEY = "lowatch.settings.v1";
 
 export type ThemeMode = "dark" | "light" | "system";
 
+export const DIAL_STYLES = ["classic", "sunburst", "comet", "dots", "gauge"] as const;
+export type DialStyle = (typeof DIAL_STYLES)[number];
+
 export interface AppSettings {
   theme: ThemeMode;
   transparentWindow: boolean;
@@ -25,6 +28,7 @@ export interface AppSettings {
   showStopwatchTenths: boolean;
   confirmStopwatchReset: boolean;
   defaultTimerDurationMs: number;
+  dialStyle: DialStyle;
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -35,10 +39,15 @@ const DEFAULT_SETTINGS: AppSettings = {
   showStopwatchTenths: true,
   confirmStopwatchReset: true,
   defaultTimerDurationMs: 5 * 60_000,
+  dialStyle: "classic",
 };
 
 function isValidTheme(val: unknown): val is ThemeMode {
   return val === "dark" || val === "light" || val === "system";
+}
+
+function isValidDialStyle(val: unknown): val is DialStyle {
+  return typeof val === "string" && (DIAL_STYLES as readonly string[]).includes(val);
 }
 
 function loadInitialSettings(): AppSettings {
@@ -76,6 +85,9 @@ function loadInitialSettings(): AppSettings {
         parsed.defaultTimerDurationMs >= 1_000
           ? parsed.defaultTimerDurationMs
           : DEFAULT_SETTINGS.defaultTimerDurationMs,
+      dialStyle: isValidDialStyle(parsed.dialStyle)
+        ? parsed.dialStyle
+        : DEFAULT_SETTINGS.dialStyle,
     };
   } catch {
     return { ...DEFAULT_SETTINGS };
@@ -90,6 +102,7 @@ class SettingsStore {
   showStopwatchTenths = $state<boolean>(DEFAULT_SETTINGS.showStopwatchTenths);
   confirmStopwatchReset = $state<boolean>(DEFAULT_SETTINGS.confirmStopwatchReset);
   defaultTimerDurationMs = $state<number>(DEFAULT_SETTINGS.defaultTimerDurationMs);
+  dialStyle = $state<DialStyle>(DEFAULT_SETTINGS.dialStyle);
   customRingtoneName = $state<string | null>(null);
   customRingtoneDurationSec = $state<number | null>(null);
   customRingtoneSize = $state<number | null>(null);
@@ -115,6 +128,7 @@ class SettingsStore {
     this.showStopwatchTenths = initial.showStopwatchTenths;
     this.confirmStopwatchReset = initial.confirmStopwatchReset;
     this.defaultTimerDurationMs = initial.defaultTimerDurationMs;
+    this.dialStyle = initial.dialStyle;
     this.#applyTheme();
 
     if (typeof window !== "undefined") {
@@ -177,6 +191,7 @@ class SettingsStore {
         showStopwatchTenths: this.showStopwatchTenths,
         confirmStopwatchReset: this.confirmStopwatchReset,
         defaultTimerDurationMs: this.defaultTimerDurationMs,
+        dialStyle: this.dialStyle,
       };
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
     } catch {
@@ -221,6 +236,11 @@ class SettingsStore {
   setDefaultTimerDurationMs(durationMs: number): void {
     if (durationMs < 1_000) return;
     this.defaultTimerDurationMs = durationMs;
+    this.#persist();
+  }
+
+  setDialStyle(style: DialStyle): void {
+    this.dialStyle = style;
     this.#persist();
   }
 

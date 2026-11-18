@@ -1,10 +1,11 @@
-﻿<script lang="ts">
+<script lang="ts">
   import AudioWaveformTrimmer from "./AudioWaveformTrimmer.svelte";
   import {
     MAX_RINGTONE_DURATION_SEC,
     formatFileSize,
   } from "../ringtoneStorage";
-  import { settingsStore, type ThemeMode } from "../stores/settings.svelte";
+  import StopwatchDial from "./StopwatchDial.svelte";
+  import { settingsStore, type DialStyle, type ThemeMode } from "../stores/settings.svelte";
 
   let fileInputEl = $state<HTMLInputElement | null>(null);
   let trimStartSec = $state(0);
@@ -15,6 +16,17 @@
     { label: "Light", value: "light" },
     { label: "System", value: "system" },
   ];
+
+  const DIAL_STYLE_OPTIONS: { label: string; value: DialStyle }[] = [
+    { label: "Classic", value: "classic" },
+    { label: "Sunburst", value: "sunburst" },
+    { label: "Comet", value: "comet" },
+    { label: "Dots", value: "dots" },
+    { label: "Gauge", value: "gauge" },
+  ];
+
+  // 23 min 37.2 s: shows a partially filled minute ring and hour ring in previews.
+  const PREVIEW_ELAPSED_MS = 23 * 60_000 + 37_200;
 
   const DURATION_OPTIONS = [
     { label: "1 min", ms: 60_000 },
@@ -82,6 +94,33 @@
                 onclick={() => settingsStore.setTheme(opt.value)}
               >
                 {opt.label}
+              </button>
+            {/each}
+          </div>
+        </div>
+
+        <div class="setting-row setting-row-col setting-row-divider">
+          <div class="setting-info">
+            <span class="setting-label">Dial style</span>
+            <span class="setting-desc">Ring design used on stopwatch and timer cards</span>
+          </div>
+          <div class="dial-style-grid" role="radiogroup" aria-label="Dial style">
+            {#each DIAL_STYLE_OPTIONS as opt (opt.value)}
+              <button
+                type="button"
+                role="radio"
+                aria-checked={settingsStore.dialStyle === opt.value}
+                class="dial-style-option"
+                class:dial-style-option-active={settingsStore.dialStyle === opt.value}
+                onclick={() => settingsStore.setDialStyle(opt.value)}
+              >
+                <StopwatchDial
+                  status="running"
+                  elapsedMs={PREVIEW_ELAPSED_MS}
+                  size={76}
+                  variant={opt.value}
+                />
+                <span>{opt.label}</span>
               </button>
             {/each}
           </div>

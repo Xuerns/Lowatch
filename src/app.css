@@ -1074,6 +1074,188 @@ html, body {
   fill: var(--dial-hand-paused);
 }
 
+/* Sunburst variant ------------------------------------------------------- */
+.sun-bar {
+  stroke: var(--dial-tick);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  transition: stroke 150ms ease;
+}
+
+.dial[data-status="running"] .sun-bar-lit {
+  stroke: var(--text-secondary);
+}
+
+.dial[data-status="paused"] .sun-bar-lit {
+  stroke: var(--dial-tick-lit-paused);
+}
+
+.sun-core {
+  fill: none;
+  stroke: var(--dial-track);
+  stroke-width: 1;
+}
+
+/* Comet variant ---------------------------------------------------------- */
+.comet-track {
+  fill: none;
+  stroke: var(--dial-track);
+  stroke-width: 1.5;
+}
+
+.comet-tick {
+  stroke: var(--dial-tick-major);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.comet-tail {
+  fill: none;
+  stroke: var(--dial-hand-idle);
+  stroke-linecap: butt;
+  transition: stroke 150ms ease;
+}
+
+.dial[data-status="running"] .comet-tail {
+  stroke: var(--text-strong);
+}
+
+.dial[data-status="paused"] .comet-tail {
+  stroke: var(--dial-hand-paused);
+}
+
+.comet-dot {
+  fill: var(--dial-hand-idle);
+  transition: fill 150ms ease;
+}
+
+.dial[data-status="running"] .comet-dot {
+  fill: var(--text-strong);
+}
+
+.dial[data-status="paused"] .comet-dot {
+  fill: var(--dial-hand-paused);
+}
+
+/* Dots variant ----------------------------------------------------------- */
+.dot {
+  fill: var(--dial-tick);
+  transition: fill 150ms ease;
+}
+
+.dot-major {
+  fill: var(--dial-tick-major);
+}
+
+.dot-hour {
+  fill: none;
+  stroke: var(--dial-tick-major);
+  stroke-width: 1;
+}
+
+.dial[data-status="running"] .dot-lit {
+  fill: var(--text-secondary);
+}
+
+.dial[data-status="paused"] .dot-lit {
+  fill: var(--dial-tick-lit-paused);
+}
+
+.dial[data-status="running"] .dot-hour.dot-lit,
+.dial[data-status="paused"] .dot-hour.dot-lit {
+  stroke: none;
+}
+
+.dial[data-status="running"] .dot-head {
+  fill: var(--text-strong);
+}
+
+.dial[data-status="paused"] .dot-head {
+  fill: var(--dial-hand-paused);
+}
+
+/* Gauge variant ---------------------------------------------------------- */
+.gauge-track,
+.gauge-progress {
+  fill: none;
+  stroke-width: 7;
+  stroke-linecap: butt;
+}
+
+.gauge-track {
+  stroke: var(--dial-track);
+}
+
+.gauge-progress {
+  stroke: transparent;
+  transition: stroke 150ms ease;
+}
+
+.dial[data-status="running"] .gauge-progress {
+  stroke: var(--text-primary);
+}
+
+.dial[data-status="paused"] .gauge-progress {
+  stroke: var(--dial-progress-paused);
+}
+
+.gauge-needle {
+  stroke: var(--dial-hand-idle);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  transition: stroke 150ms ease;
+}
+
+.dial[data-status="running"] .gauge-needle {
+  stroke: var(--text-strong);
+}
+
+.dial[data-status="paused"] .gauge-needle {
+  stroke: var(--dial-hand-paused);
+}
+
+/* Dial style picker (Settings) ------------------------------------------ */
+.dial-style-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  gap: 8px;
+}
+
+.dial-style-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 8px 10px;
+  background-color: var(--bg-app);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-card);
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  cursor: pointer;
+  --bg-card: var(--bg-app);
+  transition:
+    background-color 120ms ease,
+    color 120ms ease,
+    border-color 120ms ease;
+}
+
+.dial-style-option:hover {
+  background-color: var(--bg-control);
+  color: var(--text-strong);
+  border-color: var(--border-strong);
+  --bg-card: var(--bg-control);
+}
+
+.dial-style-option-active,
+.dial-style-option-active:hover {
+  color: var(--text-strong);
+  border-color: var(--text-muted);
+  font-weight: 600;
+}
+
 .dial-content {
   position: absolute;
   inset: 0;
