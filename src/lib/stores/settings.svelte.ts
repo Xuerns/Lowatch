@@ -10,6 +10,8 @@ import {
   playAudioRangePreview,
   playCustomRingtone,
   playTimerChime,
+  startAlarmChimeLoop,
+  stopAlarmSound,
   stopCustomRingtone,
 } from "../sound";
 
@@ -25,6 +27,7 @@ export interface AppSettings {
   transparentWindow: boolean;
   windowOpacity: number;
   timerSoundEnabled: boolean;
+  alarmSoundEnabled: boolean;
   showStopwatchTenths: boolean;
   confirmStopwatchReset: boolean;
   defaultTimerDurationMs: number;
@@ -36,6 +39,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   transparentWindow: false,
   windowOpacity: 0.78,
   timerSoundEnabled: true,
+  alarmSoundEnabled: true,
   showStopwatchTenths: true,
   confirmStopwatchReset: true,
   defaultTimerDurationMs: 5 * 60_000,
@@ -72,6 +76,10 @@ function loadInitialSettings(): AppSettings {
         typeof parsed.timerSoundEnabled === "boolean"
           ? parsed.timerSoundEnabled
           : DEFAULT_SETTINGS.timerSoundEnabled,
+      alarmSoundEnabled:
+        typeof parsed.alarmSoundEnabled === "boolean"
+          ? parsed.alarmSoundEnabled
+          : DEFAULT_SETTINGS.alarmSoundEnabled,
       showStopwatchTenths:
         typeof parsed.showStopwatchTenths === "boolean"
           ? parsed.showStopwatchTenths
@@ -99,6 +107,7 @@ class SettingsStore {
   transparentWindow = $state<boolean>(DEFAULT_SETTINGS.transparentWindow);
   windowOpacity = $state<number>(DEFAULT_SETTINGS.windowOpacity);
   timerSoundEnabled = $state<boolean>(DEFAULT_SETTINGS.timerSoundEnabled);
+  alarmSoundEnabled = $state<boolean>(DEFAULT_SETTINGS.alarmSoundEnabled);
   showStopwatchTenths = $state<boolean>(DEFAULT_SETTINGS.showStopwatchTenths);
   confirmStopwatchReset = $state<boolean>(DEFAULT_SETTINGS.confirmStopwatchReset);
   defaultTimerDurationMs = $state<number>(DEFAULT_SETTINGS.defaultTimerDurationMs);
@@ -110,6 +119,7 @@ class SettingsStore {
   isRingtoneLoading = $state<boolean>(false);
   isPreviewPlaying = $state<boolean>(false);
   isNotificationPlaying = $state<boolean>(false);
+  isAlarmNotificationPlaying = $state<boolean>(false);
   activeNotificationTimerName = $state<string | null>(null);
   pendingTrimFile = $state<File | null>(null);
   pendingTrimDurationSec = $state<number>(0);
@@ -125,6 +135,7 @@ class SettingsStore {
     this.transparentWindow = initial.transparentWindow;
     this.windowOpacity = initial.windowOpacity;
     this.timerSoundEnabled = initial.timerSoundEnabled;
+    this.alarmSoundEnabled = initial.alarmSoundEnabled;
     this.showStopwatchTenths = initial.showStopwatchTenths;
     this.confirmStopwatchReset = initial.confirmStopwatchReset;
     this.defaultTimerDurationMs = initial.defaultTimerDurationMs;
@@ -188,6 +199,7 @@ class SettingsStore {
         transparentWindow: this.transparentWindow,
         windowOpacity: this.windowOpacity,
         timerSoundEnabled: this.timerSoundEnabled,
+        alarmSoundEnabled: this.alarmSoundEnabled,
         showStopwatchTenths: this.showStopwatchTenths,
         confirmStopwatchReset: this.confirmStopwatchReset,
         defaultTimerDurationMs: this.defaultTimerDurationMs,
@@ -220,6 +232,14 @@ class SettingsStore {
 
   setTimerSoundEnabled(enabled: boolean): void {
     this.timerSoundEnabled = enabled;
+    this.#persist();
+  }
+
+  setAlarmSoundEnabled(enabled: boolean): void {
+    this.alarmSoundEnabled = enabled;
+    if (!enabled) {
+      this.stopAlarmNotification();
+    }
     this.#persist();
   }
 
@@ -376,7 +396,7 @@ class SettingsStore {
   }
 
   playTimerNotification(timerName?: string): void {
-    if (!this.timerSoundEnabled) return;
+    if (!this.timerSoundEnabled || this.isAlarmNotificationPlaying) return;
     this.stopPreview();
     this.stopTrimPreview();
     if (this.#customRingtoneBlob) {
@@ -389,6 +409,29 @@ class SettingsStore {
     } else {
       playTimerChime();
     }
+  }
+
+  /**
+   * Memutar suara alarm berulang sampai pengguna menunda atau mematikannya.
+   * Ringtone custom dipakai bila tersedia; jika tidak, chime bawaan diulang.
+   */
+  playAlarmNotification(): void {
+    this.stopPreview();
+    this.stopTrimPreview();
+    this.stopTimerNotification();
+    this.stopAlarmNotification();
+    this.isAlarmNotificationPlaying = true;
+    if (!this.alarmSoundEnabled) return;
+    if (this.#customRingtoneBlob) {
+      playCustomRingtone(this.#customRingtoneBlob, undefined, true);
+    } else {
+      startAlarmChimeLoop();
+    }
+  }
+
+  stopAlarmNotification(): void {
+    stopAlarmSound();
+    this.isAlarmNotificationPlaying = false;
   }
 }
 

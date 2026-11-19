@@ -1,5 +1,5 @@
 ﻿<script lang="ts">
-  export type AppPage = "stopwatch" | "timer" | "settings";
+  export type AppPage = "stopwatch" | "timer" | "alarm" | "settings";
 
   interface Props {
     activePage: AppPage;
@@ -87,6 +87,34 @@
             {timerRunningCount}
           </span>
         {/if}
+      {/if}
+    </button>
+
+    <button
+      type="button"
+      class="nav-item"
+      class:nav-item-active={activePage === "alarm"}
+      onclick={() => onSelectPage("alarm")}
+      aria-current={activePage === "alarm" ? "page" : undefined}
+      title="Alarms"
+    >
+      <svg
+        class="nav-icon"
+        width="17"
+        height="17"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+        <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+      </svg>
+      {#if !collapsed}
+        <span class="nav-label">Alarms</span>
       {/if}
     </button>
   </nav>

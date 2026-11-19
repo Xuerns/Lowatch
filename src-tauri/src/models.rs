@@ -121,3 +121,54 @@ impl Timer {
         }
     }
 }
+
+/// Representasi baris tabel `alarms` di SQLite.
+///
+/// `repeat_days` adalah bitmask Senin..Minggu (bit 0 = Senin). Nilai 0 berarti
+/// alarm sekali pakai, bukan alarm yang tidak pernah berbunyi.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Alarm {
+    pub id: i64,
+    pub name: String,
+    pub hour: u8,
+    pub minute: u8,
+    pub repeat_days: u8,
+    pub enabled: bool,
+    pub snoozed_until_ms: Option<i64>,
+    pub next_ring_at_ms: Option<i64>,
+    pub last_triggered_at_ms: Option<i64>,
+    pub position: i64,
+    pub created_at_ms: i64,
+    pub updated_at_ms: i64,
+}
+
+/// Data Transfer Object alarm yang diserialisasi ke frontend melalui IPC Tauri.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AlarmDto {
+    pub id: i64,
+    pub name: String,
+    pub hour: u8,
+    pub minute: u8,
+    pub repeat_days: u8,
+    pub enabled: bool,
+    pub snoozed_until_ms: Option<i64>,
+    pub next_ring_at_ms: Option<i64>,
+    pub position: i64,
+}
+
+impl Alarm {
+    /// Mengonversi entity domain `Alarm` menjadi `AlarmDto`.
+    pub fn to_dto(&self) -> AlarmDto {
+        AlarmDto {
+            id: self.id,
+            name: self.name.clone(),
+            hour: self.hour,
+            minute: self.minute,
+            repeat_days: self.repeat_days,
+            enabled: self.enabled,
+            snoozed_until_ms: self.snoozed_until_ms,
+            next_ring_at_ms: self.next_ring_at_ms,
+            position: self.position,
+        }
+    }
+}

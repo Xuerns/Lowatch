@@ -2,13 +2,13 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum AppError {
-    #[error("Stopwatch name cannot be empty.")]
+    #[error("Name cannot be empty.")]
     EmptyName,
 
-    #[error("Stopwatch name must be at most 50 characters (currently {0} characters).")]
+    #[error("Name must be at most 50 characters (currently {0} characters).")]
     NameTooLong(usize),
 
-    #[error("Stopwatch name contains invalid characters.")]
+    #[error("Name contains invalid characters.")]
     InvalidNameCharacters,
 
     #[error("Stopwatch with ID {0} not found.")]
@@ -19,6 +19,21 @@ pub enum AppError {
 
     #[error("Timer duration must be between 1 second and 99:59:59.")]
     InvalidTimerDuration,
+
+    #[error("Alarm with ID {0} not found.")]
+    AlarmNotFound(i64),
+
+    #[error("Alarm time must be a valid time of day (00:00 to 23:59).")]
+    InvalidAlarmTime,
+
+    #[error("Alarm repeat days are invalid.")]
+    InvalidAlarmRepeatDays,
+
+    #[error("Snooze duration must be between 1 and 60 minutes.")]
+    InvalidSnoozeDuration,
+
+    #[error("Unable to compute the next alarm occurrence.")]
+    AlarmSchedule,
 
     #[error("Failed to access internal state lock.")]
     StateLockPoisoned,

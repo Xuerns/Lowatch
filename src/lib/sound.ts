@@ -1,6 +1,7 @@
 let audioCtx: AudioContext | null = null;
 let activeAudio: HTMLAudioElement | null = null;
 let activeAudioUrl: string | null = null;
+let alarmChimeInterval: ReturnType<typeof setInterval> | null = null;
 
 /**
  * Menghentikan pemutaran nada dering custom yang sedang berjalan.
@@ -16,6 +17,33 @@ export function stopCustomRingtone(): void {
     URL.revokeObjectURL(activeAudioUrl);
     activeAudioUrl = null;
   }
+}
+
+/**
+ * Menghentikan loop chime alarm bawaan.
+ */
+export function stopAlarmChimeLoop(): void {
+  if (alarmChimeInterval !== null) {
+    clearInterval(alarmChimeInterval);
+    alarmChimeInterval = null;
+  }
+}
+
+/**
+ * Memutar chime alarm secara berulang sampai dihentikan.
+ */
+export function startAlarmChimeLoop(): void {
+  stopAlarmChimeLoop();
+  playTimerChime();
+  alarmChimeInterval = setInterval(playTimerChime, 2_800);
+}
+
+/**
+ * Menghentikan seluruh sumber suara alarm (chime maupun ringtone custom).
+ */
+export function stopAlarmSound(): void {
+  stopAlarmChimeLoop();
+  stopCustomRingtone();
 }
 
 /**
@@ -73,11 +101,16 @@ export function playAudioRangePreview(
 /**
  * Memutar file audio custom dari Blob. Mengembalikan true jika berhasil memulai pemutaran.
  */
-export function playCustomRingtone(blob: Blob, onEnded?: () => void): boolean {
+export function playCustomRingtone(
+  blob: Blob,
+  onEnded?: () => void,
+  loop = false
+): boolean {
   try {
     stopCustomRingtone();
     const url = URL.createObjectURL(blob);
     const audio = new Audio(url);
+    audio.loop = loop;
     activeAudio = audio;
     activeAudioUrl = url;
 
@@ -90,24 +123,27 @@ export function playCustomRingtone(blob: Blob, onEnded?: () => void): boolean {
       onEnded?.();
     };
 
-    audio.addEventListener("ended", handleFinish, { once: true });
-    audio.addEventListener(
-      "error",
-      () => {
-        handleFinish();
-        playTimerChime();
-      },
-      { once: true }
-    );
-
-    void audio.play().catch(() => {
+    const handleFailure = () => {
       handleFinish();
-      playTimerChime();
-    });
+      if (loop) {
+        startAlarmChimeLoop();
+      } else {
+        playTimerChime();
+      }
+    };
+
+    audio.addEventListener("ended", handleFinish, { once: true });
+    audio.addEventListener("error", handleFailure, { once: true });
+
+    void audio.play().catch(handleFailure);
     return true;
   } catch {
     stopCustomRingtone();
-    playTimerChime();
+    if (loop) {
+      startAlarmChimeLoop();
+    } else {
+      playTimerChime();
+    }
     onEnded?.();
     return false;
   }

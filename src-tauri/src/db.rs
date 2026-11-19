@@ -2,8 +2,9 @@ use std::path::Path;
 
 use rusqlite::{Connection, ErrorCode, OptionalExtension, Row, params};
 
+use crate::alarm;
 use crate::error::AppError;
-use crate::models::{Stopwatch, Timer};
+use crate::models::{Alarm, Stopwatch, Timer};
 use crate::stopwatch;
 use crate::timer;
 
@@ -72,6 +73,28 @@ pub fn migrate(conn: &Connection) -> Result<(), AppError> {
              );
              CREATE INDEX IF NOT EXISTS idx_timers_position ON timers(position ASC, id ASC);
              PRAGMA user_version = 2;
+             COMMIT;",
+        )?;
+    }
+    if version < 3 {
+        conn.execute_batch(
+            "BEGIN;
+             CREATE TABLE IF NOT EXISTS alarms (
+                 id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+                 name                 TEXT    NOT NULL,
+                 hour                 INTEGER NOT NULL,
+                 minute               INTEGER NOT NULL,
+                 repeat_days          INTEGER NOT NULL DEFAULT 0,
+                 enabled              INTEGER NOT NULL DEFAULT 1,
+                 snoozed_until_ms     INTEGER,
+                 next_ring_at_ms      INTEGER,
+                 last_triggered_at_ms INTEGER,
+                 position             INTEGER NOT NULL,
+                 created_at_ms        INTEGER NOT NULL,
+                 updated_at_ms        INTEGER NOT NULL
+             );
+             CREATE INDEX IF NOT EXISTS idx_alarms_position ON alarms(position ASC, id ASC);
+             PRAGMA user_version = 3;
              COMMIT;",
         )?;
     }
@@ -509,6 +532,243 @@ pub fn delete_timer(conn: &Connection, id: i64) -> Result<(), AppError> {
     Ok(())
 }
 
+fn map_alarm_row(row: &Row<'_>) -> Result<Alarm, rusqlite::Error> {
+    Ok(Alarm {
+        id: row.get(0)?,
+        name: row.get(1)?,
+        hour: row.get(2)?,
+        minute: row.get(3)?,
+        repeat_days: row.get(4)?,
+        enabled: row.get(5)?,
+        snoozed_until_ms: row.get(6)?,
+        next_ring_at_ms: row.get(7)?,
+        last_triggered_at_ms: row.get(8)?,
+        position: row.get(9)?,
+        created_at_ms: row.get(10)?,
+        updated_at_ms: row.get(11)?,
+    })
+}
+
+/// Mengambil seluruh daftar alarm diurutkan berdasarkan `position ASC, id ASC`.
+pub fn list_alarms(conn: &Connection) -> Result<Vec<Alarm>, AppError> {
+    let mut stmt = conn.prepare(
+        "SELECT id, name, hour, minute, repeat_days, enabled, snoozed_until_ms, next_ring_at_ms,
+                last_triggered_at_ms, position, created_at_ms, updated_at_ms
+         FROM alarms
+         ORDER BY position ASC, id ASC",
+    )?;
+    let rows = stmt.query_map(params![], map_alarm_row)?;
+    let mut items = Vec::new();
+    for row in rows {
+        items.push(row?);
+    }
+    Ok(items)
+}
+
+/// Mengambil satu alarm berdasarkan `id`.
+pub fn get_alarm(conn: &Connection, id: i64) -> Result<Alarm, AppError> {
+    let mut stmt = conn.prepare(
+        "SELECT id, name, hour, minute, repeat_days, enabled, snoozed_until_ms, next_ring_at_ms,
+                last_triggered_at_ms, position, created_at_ms, updated_at_ms
+         FROM alarms
+         WHERE id = ?1",
+    )?;
+    let alarm = stmt
+        .query_row(params![id], map_alarm_row)
+        .optional()?
+        .ok_or(AppError::AlarmNotFound(id))?;
+    Ok(alarm)
+}
+
+/// Menghitung angka `N` berikutnya untuk penamaan default `"Alarm N"` dan `position`.
+pub fn next_alarm_default_number(conn: &Connection) -> Result<i64, AppError> {
+    let next_pos: i64 = conn.query_row(
+        "SELECT COALESCE(MAX(position), 0) + 1 FROM alarms",
+        params![],
+        |row| row.get(0),
+    )?;
+    Ok(next_pos.max(1))
+}
+
+/// Membuat alarm baru beserta jadwal berbunyi pertamanya.
+pub fn create_alarm(
+    conn: &Connection,
+    name: Option<&str>,
+    hour: u8,
+    minute: u8,
+    repeat_days: u8,
+    now_ms: i64,
+) -> Result<Alarm, AppError> {
+    let valid_hour = alarm::validate_hour(i64::from(hour))?;
+    let valid_minute = alarm::validate_minute(i64::from(minute))?;
+    let valid_repeat = alarm::validate_repeat_days(i64::from(repeat_days))?;
+    let position = next_alarm_default_number(conn)?;
+    let resolved_name = alarm::resolve_create_name(name, position)?;
+
+    let mut created = Alarm {
+        id: 0,
+        name: resolved_name,
+        hour: valid_hour,
+        minute: valid_minute,
+        repeat_days: valid_repeat,
+        enabled: true,
+        snoozed_until_ms: None,
+        next_ring_at_ms: None,
+        last_triggered_at_ms: None,
+        position,
+        created_at_ms: now_ms,
+        updated_at_ms: now_ms,
+    };
+    alarm::schedule(&mut created, now_ms)?;
+
+    conn.execute(
+        "INSERT INTO alarms (name, hour, minute, repeat_days, enabled, snoozed_until_ms,
+                             next_ring_at_ms, last_triggered_at_ms, position, created_at_ms, updated_at_ms)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+        params![
+            created.name,
+            created.hour,
+            created.minute,
+            created.repeat_days,
+            created.enabled,
+            created.snoozed_until_ms,
+            created.next_ring_at_ms,
+            created.last_triggered_at_ms,
+            created.position,
+            created.created_at_ms,
+            created.updated_at_ms
+        ],
+    )?;
+
+    created.id = conn.last_insert_rowid();
+    Ok(created)
+}
+
+/// Menyimpan seluruh perubahan state alarm ke database.
+pub fn save_alarm_state(conn: &Connection, alarm: &Alarm) -> Result<(), AppError> {
+    let affected = conn.execute(
+        "UPDATE alarms
+         SET name = ?1, hour = ?2, minute = ?3, repeat_days = ?4, enabled = ?5,
+             snoozed_until_ms = ?6, next_ring_at_ms = ?7, last_triggered_at_ms = ?8,
+             updated_at_ms = ?9
+         WHERE id = ?10",
+        params![
+            alarm.name,
+            alarm.hour,
+            alarm.minute,
+            alarm.repeat_days,
+            alarm.enabled,
+            alarm.snoozed_until_ms,
+            alarm.next_ring_at_ms,
+            alarm.last_triggered_at_ms,
+            alarm.updated_at_ms,
+            alarm.id
+        ],
+    )?;
+    if affected == 0 {
+        return Err(AppError::AlarmNotFound(alarm.id));
+    }
+    Ok(())
+}
+
+/// Memperbarui label, waktu, dan hari pengulangan alarm.
+///
+/// Perubahan jadwal membatalkan snooze yang sedang tertunda agar alarm tidak
+/// berbunyi pada waktu lama yang sudah tidak relevan.
+pub fn update_alarm(
+    conn: &Connection,
+    id: i64,
+    name: &str,
+    hour: u8,
+    minute: u8,
+    repeat_days: u8,
+    now_ms: i64,
+) -> Result<Alarm, AppError> {
+    let valid_name = stopwatch::validate_name(name)?;
+    let valid_hour = alarm::validate_hour(i64::from(hour))?;
+    let valid_minute = alarm::validate_minute(i64::from(minute))?;
+    let valid_repeat = alarm::validate_repeat_days(i64::from(repeat_days))?;
+
+    let mut existing = get_alarm(conn, id)?;
+    existing.name = valid_name;
+    existing.hour = valid_hour;
+    existing.minute = valid_minute;
+    existing.repeat_days = valid_repeat;
+    existing.snoozed_until_ms = None;
+    existing.updated_at_ms = now_ms;
+    if existing.enabled {
+        alarm::schedule(&mut existing, now_ms)?;
+    } else {
+        existing.next_ring_at_ms = None;
+    }
+    save_alarm_state(conn, &existing)?;
+    Ok(existing)
+}
+
+/// Menghapus alarm berdasarkan `id`.
+pub fn delete_alarm(conn: &Connection, id: i64) -> Result<(), AppError> {
+    let affected = conn.execute("DELETE FROM alarms WHERE id = ?1", params![id])?;
+    if affected == 0 {
+        return Err(AppError::AlarmNotFound(id));
+    }
+    Ok(())
+}
+
+/// Menyegarkan jadwal seluruh alarm saat aplikasi dibuka.
+///
+/// - Snooze yang tertunda dipertahankan, termasuk yang sudah lewat agar langsung berbunyi.
+/// - Alarm sekali pakai yang terlewat saat aplikasi tertutup dinonaktifkan.
+/// - Alarm berulang dijadwalkan ulang dari waktu sekarang.
+pub fn rearm_alarms(conn: &Connection, now_ms: i64) -> Result<usize, AppError> {
+    let mut changed = 0;
+
+    for mut scheduled in list_alarms(conn)? {
+        if !scheduled.enabled {
+            if scheduled.next_ring_at_ms.is_some() || scheduled.snoozed_until_ms.is_some() {
+                scheduled.next_ring_at_ms = None;
+                scheduled.snoozed_until_ms = None;
+                save_alarm_state(conn, &scheduled)?;
+                changed += 1;
+            }
+            continue;
+        }
+
+        if let Some(snoozed_until) = scheduled.snoozed_until_ms {
+            if scheduled.next_ring_at_ms != Some(snoozed_until) {
+                scheduled.next_ring_at_ms = Some(snoozed_until);
+                save_alarm_state(conn, &scheduled)?;
+                changed += 1;
+            }
+            continue;
+        }
+
+        let missed_once =
+            scheduled.repeat_days == 0 && scheduled.next_ring_at_ms.is_some_and(|t| t <= now_ms);
+        if missed_once {
+            scheduled.enabled = false;
+            scheduled.next_ring_at_ms = None;
+            scheduled.updated_at_ms = now_ms;
+            save_alarm_state(conn, &scheduled)?;
+            changed += 1;
+            continue;
+        }
+
+        let next_ring = alarm::compute_regular_next_ring_at_ms(
+            scheduled.hour,
+            scheduled.minute,
+            scheduled.repeat_days,
+            now_ms,
+        )?;
+        if scheduled.next_ring_at_ms != next_ring {
+            scheduled.next_ring_at_ms = next_ring;
+            save_alarm_state(conn, &scheduled)?;
+            changed += 1;
+        }
+    }
+
+    Ok(changed)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -522,13 +782,13 @@ mod tests {
     }
 
     #[test]
-    fn test_migration_sets_user_version_2() {
+    fn test_migration_sets_user_version_3() {
         let conn = open_test_memory_db();
-        assert_eq!(get_user_version(&conn).ok(), Some(2));
+        assert_eq!(get_user_version(&conn).ok(), Some(3));
 
         // Memastikan idempotent jika migrate dipanggil lagi
         assert!(migrate(&conn).is_ok());
-        assert_eq!(get_user_version(&conn).ok(), Some(2));
+        assert_eq!(get_user_version(&conn).ok(), Some(3));
     }
 
     #[test]
@@ -652,7 +912,7 @@ mod tests {
         };
 
         let mut conn2 = init_db(&db_path).expect("init_db reopen");
-        assert_eq!(get_user_version(&conn2).ok(), Some(2));
+        assert_eq!(get_user_version(&conn2).ok(), Some(3));
 
         let loaded = get_stopwatch(&conn2, sw_id).expect("load persisted stopwatch");
         assert_eq!(loaded.name, "Riset SQLite");
@@ -758,5 +1018,117 @@ mod tests {
             delete_timer(&conn, t1.id),
             Err(AppError::TimerNotFound(id)) if id == t1.id
         ));
+    }
+
+    #[test]
+    fn test_alarm_crud_and_state_persistence() {
+        let conn = open_test_memory_db();
+        let now = stopwatch::now_ms().expect("current time");
+
+        let created = create_alarm(&conn, None, 7, 30, 0, now).expect("create default alarm");
+        assert_eq!(created.name, "Alarm 1");
+        assert_eq!(created.position, 1);
+        assert!(created.enabled);
+        assert!(created.next_ring_at_ms.is_some_and(|next| next > now));
+
+        let updated = update_alarm(
+            &conn,
+            created.id,
+            "  Bangun pagi  ",
+            6,
+            45,
+            0b0001_1111,
+            now,
+        )
+        .expect("update alarm");
+        assert_eq!(updated.name, "Bangun pagi");
+        assert_eq!(updated.hour, 6);
+        assert_eq!(updated.minute, 45);
+        assert_eq!(updated.repeat_days, 0b0001_1111);
+        assert!(updated.next_ring_at_ms.is_some());
+
+        let mut state = updated.clone();
+        alarm::set_enabled(&mut state, false, now).expect("disable alarm");
+        save_alarm_state(&conn, &state).expect("save disabled alarm");
+        let disabled = get_alarm(&conn, created.id).expect("get disabled alarm");
+        assert!(!disabled.enabled);
+        assert_eq!(disabled.next_ring_at_ms, None);
+
+        alarm::set_enabled(&mut state, true, now).expect("enable alarm");
+        alarm::snooze(&mut state, 5, now).expect("snooze alarm");
+        save_alarm_state(&conn, &state).expect("save snoozed alarm");
+        let snoozed = get_alarm(&conn, created.id).expect("get snoozed alarm");
+        assert!(snoozed.enabled);
+        assert_eq!(snoozed.snoozed_until_ms, Some(now + 5 * 60_000));
+        assert_eq!(snoozed.next_ring_at_ms, Some(now + 5 * 60_000));
+
+        alarm::dismiss(&mut state, now).expect("dismiss alarm");
+        save_alarm_state(&conn, &state).expect("save dismissed alarm");
+        let dismissed = get_alarm(&conn, created.id).expect("get dismissed alarm");
+        assert!(dismissed.enabled);
+        assert_eq!(dismissed.snoozed_until_ms, None);
+
+        let second = create_alarm(&conn, Some("Tidur"), 22, 0, 0b0111_1111, now)
+            .expect("create repeating alarm");
+        assert_eq!(second.name, "Tidur");
+        assert_eq!(second.position, 2);
+        assert_eq!(second.repeat_days, 0b0111_1111);
+
+        let all = list_alarms(&conn).expect("list alarms");
+        assert_eq!(all.len(), 2);
+
+        delete_alarm(&conn, created.id).expect("delete first alarm");
+        assert_eq!(list_alarms(&conn).expect("list after delete").len(), 1);
+        assert!(matches!(
+            delete_alarm(&conn, created.id),
+            Err(AppError::AlarmNotFound(id)) if id == created.id
+        ));
+        assert!(matches!(
+            get_alarm(&conn, created.id),
+            Err(AppError::AlarmNotFound(id)) if id == created.id
+        ));
+    }
+
+    #[test]
+    fn test_alarm_rearm_handles_missed_once_stale_repeat_and_snooze() {
+        let conn = open_test_memory_db();
+        let now = stopwatch::now_ms().expect("current time");
+
+        let mut once = create_alarm(&conn, None, 7, 0, 0, now).expect("create once");
+        once.next_ring_at_ms = Some(now - 60_000);
+        save_alarm_state(&conn, &once).expect("save overdue once");
+
+        let mut repeating =
+            create_alarm(&conn, Some("Harian"), 6, 0, 0b0111_1111, now).expect("create repeating");
+        repeating.next_ring_at_ms = Some(now - 24 * 3_600_000);
+        save_alarm_state(&conn, &repeating).expect("save stale repeating");
+
+        let mut snoozed =
+            create_alarm(&conn, Some("Snooze"), 5, 0, 0, now).expect("create snoozed alarm");
+        snoozed.snoozed_until_ms = Some(now - 1_000);
+        snoozed.next_ring_at_ms = Some(now - 1_000);
+        save_alarm_state(&conn, &snoozed).expect("save pending snooze");
+
+        let changed = rearm_alarms(&conn, now).expect("rearm alarms");
+        assert_eq!(changed, 2);
+
+        let once_after = get_alarm(&conn, once.id).expect("get once after rearm");
+        assert!(!once_after.enabled);
+        assert_eq!(once_after.next_ring_at_ms, None);
+
+        let repeating_after = get_alarm(&conn, repeating.id).expect("get repeating after rearm");
+        assert!(repeating_after.enabled);
+        assert!(
+            repeating_after
+                .next_ring_at_ms
+                .is_some_and(|next| next > now)
+        );
+
+        let snoozed_after = get_alarm(&conn, snoozed.id).expect("get snoozed after rearm");
+        assert!(snoozed_after.enabled);
+        assert_eq!(snoozed_after.next_ring_at_ms, Some(now - 1_000));
+
+        // Pemanggilan kedua harus idempotent.
+        assert_eq!(rearm_alarms(&conn, now).expect("rearm again"), 0);
     }
 }

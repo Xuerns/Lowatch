@@ -1,9 +1,10 @@
 use tauri::State;
 
 use crate::AppState;
+use crate::alarm;
 use crate::db;
 use crate::error::AppError;
-use crate::models::{Stopwatch, StopwatchDto, Timer, TimerDto};
+use crate::models::{Alarm, AlarmDto, Stopwatch, StopwatchDto, Timer, TimerDto};
 use crate::stopwatch;
 use crate::timer;
 
@@ -291,6 +292,168 @@ pub fn delete_timer(state: State<'_, AppState>, id: i64) -> Result<(), String> {
     delete_timer_inner(&state, id).map_err(Into::into)
 }
 
+/// Helper internal untuk mengambil seluruh daftar alarm sebagai DTO.
+pub fn list_alarms_inner(state: &AppState) -> Result<Vec<AlarmDto>, AppError> {
+    let conn = state.lock_db()?;
+    let items = db::list_alarms(&conn)?;
+    Ok(items.iter().map(Alarm::to_dto).collect())
+}
+
+/// Helper internal untuk membuat alarm baru.
+///
+/// Jika jam dan menit tidak diberikan, alarm dijadwalkan pada jam berikutnya.
+pub fn create_alarm_inner(
+    state: &AppState,
+    name: Option<&str>,
+    hour: Option<i64>,
+    minute: Option<i64>,
+    repeat_days: Option<i64>,
+) -> Result<AlarmDto, AppError> {
+    let now = stopwatch::now_ms()?;
+    let (valid_hour, valid_minute) = alarm::resolve_create_time(hour, minute, now)?;
+    let valid_repeat = match repeat_days {
+        Some(mask) => alarm::validate_repeat_days(mask)?,
+        None => 0,
+    };
+    let conn = state.lock_db()?;
+    let created = db::create_alarm(&conn, name, valid_hour, valid_minute, valid_repeat, now)?;
+    Ok(created.to_dto())
+}
+
+/// Helper internal untuk memperbarui label, waktu, dan hari pengulangan alarm.
+pub fn update_alarm_inner(
+    state: &AppState,
+    id: i64,
+    name: &str,
+    hour: i64,
+    minute: i64,
+    repeat_days: i64,
+) -> Result<AlarmDto, AppError> {
+    let valid_hour = alarm::validate_hour(hour)?;
+    let valid_minute = alarm::validate_minute(minute)?;
+    let valid_repeat = alarm::validate_repeat_days(repeat_days)?;
+    let now = stopwatch::now_ms()?;
+    let conn = state.lock_db()?;
+    let updated = db::update_alarm(&conn, id, name, valid_hour, valid_minute, valid_repeat, now)?;
+    Ok(updated.to_dto())
+}
+
+/// Helper internal untuk mengaktifkan atau menonaktifkan alarm.
+pub fn set_alarm_enabled_inner(
+    state: &AppState,
+    id: i64,
+    enabled: bool,
+) -> Result<AlarmDto, AppError> {
+    let now = stopwatch::now_ms()?;
+    let conn = state.lock_db()?;
+    let mut existing = db::get_alarm(&conn, id)?;
+    alarm::set_enabled(&mut existing, enabled, now)?;
+    db::save_alarm_state(&conn, &existing)?;
+    Ok(existing.to_dto())
+}
+
+/// Helper internal untuk menandai alarm mulai berbunyi.
+pub fn ring_alarm_inner(state: &AppState, id: i64) -> Result<AlarmDto, AppError> {
+    let now = stopwatch::now_ms()?;
+    let conn = state.lock_db()?;
+    let mut existing = db::get_alarm(&conn, id)?;
+    alarm::start_ringing(&mut existing, now)?;
+    db::save_alarm_state(&conn, &existing)?;
+    Ok(existing.to_dto())
+}
+
+/// Helper internal untuk menunda alarm yang sedang berbunyi.
+pub fn snooze_alarm_inner(
+    state: &AppState,
+    id: i64,
+    minutes: Option<i64>,
+) -> Result<AlarmDto, AppError> {
+    let now = stopwatch::now_ms()?;
+    let snooze_minutes = minutes.unwrap_or(alarm::DEFAULT_SNOOZE_MINUTES);
+    let conn = state.lock_db()?;
+    let mut existing = db::get_alarm(&conn, id)?;
+    alarm::snooze(&mut existing, snooze_minutes, now)?;
+    db::save_alarm_state(&conn, &existing)?;
+    Ok(existing.to_dto())
+}
+
+/// Helper internal untuk menutup alarm yang sedang berbunyi.
+pub fn dismiss_alarm_inner(state: &AppState, id: i64) -> Result<AlarmDto, AppError> {
+    let now = stopwatch::now_ms()?;
+    let conn = state.lock_db()?;
+    let mut existing = db::get_alarm(&conn, id)?;
+    alarm::dismiss(&mut existing, now)?;
+    db::save_alarm_state(&conn, &existing)?;
+    Ok(existing.to_dto())
+}
+
+/// Helper internal untuk menghapus alarm berdasarkan ID.
+pub fn delete_alarm_inner(state: &AppState, id: i64) -> Result<(), AppError> {
+    let conn = state.lock_db()?;
+    db::delete_alarm(&conn, id)
+}
+
+#[tauri::command]
+pub fn list_alarms(state: State<'_, AppState>) -> Result<Vec<AlarmDto>, String> {
+    list_alarms_inner(&state).map_err(Into::into)
+}
+
+#[tauri::command]
+pub fn create_alarm(
+    state: State<'_, AppState>,
+    name: Option<String>,
+    hour: Option<i64>,
+    minute: Option<i64>,
+    repeat_days: Option<i64>,
+) -> Result<AlarmDto, String> {
+    create_alarm_inner(&state, name.as_deref(), hour, minute, repeat_days).map_err(Into::into)
+}
+
+#[tauri::command]
+pub fn update_alarm(
+    state: State<'_, AppState>,
+    id: i64,
+    name: String,
+    hour: i64,
+    minute: i64,
+    repeat_days: i64,
+) -> Result<AlarmDto, String> {
+    update_alarm_inner(&state, id, &name, hour, minute, repeat_days).map_err(Into::into)
+}
+
+#[tauri::command]
+pub fn set_alarm_enabled(
+    state: State<'_, AppState>,
+    id: i64,
+    enabled: bool,
+) -> Result<AlarmDto, String> {
+    set_alarm_enabled_inner(&state, id, enabled).map_err(Into::into)
+}
+
+#[tauri::command]
+pub fn ring_alarm(state: State<'_, AppState>, id: i64) -> Result<AlarmDto, String> {
+    ring_alarm_inner(&state, id).map_err(Into::into)
+}
+
+#[tauri::command]
+pub fn snooze_alarm(
+    state: State<'_, AppState>,
+    id: i64,
+    minutes: Option<i64>,
+) -> Result<AlarmDto, String> {
+    snooze_alarm_inner(&state, id, minutes).map_err(Into::into)
+}
+
+#[tauri::command]
+pub fn dismiss_alarm(state: State<'_, AppState>, id: i64) -> Result<AlarmDto, String> {
+    dismiss_alarm_inner(&state, id).map_err(Into::into)
+}
+
+#[tauri::command]
+pub fn delete_alarm(state: State<'_, AppState>, id: i64) -> Result<(), String> {
+    delete_alarm_inner(&state, id).map_err(Into::into)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -396,6 +559,87 @@ mod tests {
         assert!(matches!(
             reset_stopwatch_inner(&state, 9999),
             Err(AppError::NotFound(9999))
+        ));
+    }
+
+    #[test]
+    fn test_commands_alarm_crud_ring_snooze_and_validation() {
+        let (_dir, state) = make_test_state();
+        let before = stopwatch::now_ms().expect("current time");
+
+        let created = create_alarm_inner(&state, None, None, None, None).expect("create alarm");
+        assert_eq!(created.name, "Alarm 1");
+        assert_eq!(created.position, 1);
+        assert!(created.enabled);
+        assert!(created.next_ring_at_ms.is_some_and(|next| next > before));
+
+        assert_eq!(list_alarms_inner(&state).expect("list alarms").len(), 1);
+
+        let updated = update_alarm_inner(&state, created.id, "  Pagi  ", 6, 15, 0b0001_1111)
+            .expect("update alarm");
+        assert_eq!(updated.name, "Pagi");
+        assert_eq!(updated.hour, 6);
+        assert_eq!(updated.minute, 15);
+        assert_eq!(updated.repeat_days, 0b0001_1111);
+
+        let disabled = set_alarm_enabled_inner(&state, created.id, false).expect("disable alarm");
+        assert!(!disabled.enabled);
+        assert_eq!(disabled.next_ring_at_ms, None);
+
+        let enabled = set_alarm_enabled_inner(&state, created.id, true).expect("enable alarm");
+        assert!(enabled.enabled);
+        assert!(enabled.next_ring_at_ms.is_some());
+
+        let snoozed = snooze_alarm_inner(&state, created.id, Some(10)).expect("snooze alarm");
+        assert!(snoozed.enabled);
+        assert!(snoozed.snoozed_until_ms.is_some());
+        assert_eq!(snoozed.next_ring_at_ms, snoozed.snoozed_until_ms);
+
+        assert!(snoozed.snoozed_until_ms.is_some());
+        let ringing = ring_alarm_inner(&state, created.id).expect("ring alarm");
+        assert!(ringing.enabled);
+        assert_eq!(ringing.snoozed_until_ms, None);
+        assert!(ringing.next_ring_at_ms.is_some());
+
+        let dismissed = dismiss_alarm_inner(&state, created.id).expect("dismiss alarm");
+        assert!(dismissed.enabled);
+        assert_eq!(dismissed.snoozed_until_ms, None);
+
+        let once = create_alarm_inner(&state, Some("Sekali"), Some(23), Some(59), Some(0))
+            .expect("create one-shot alarm");
+        let once_ringing = ring_alarm_inner(&state, once.id).expect("ring one-shot");
+        assert!(!once_ringing.enabled);
+        assert_eq!(once_ringing.next_ring_at_ms, None);
+
+        assert!(matches!(
+            create_alarm_inner(&state, None, Some(24), Some(0), None),
+            Err(AppError::InvalidAlarmTime)
+        ));
+        assert!(matches!(
+            create_alarm_inner(&state, None, Some(7), Some(0), Some(128)),
+            Err(AppError::InvalidAlarmRepeatDays)
+        ));
+        assert!(matches!(
+            update_alarm_inner(&state, created.id, "Pagi", 6, 60, 0),
+            Err(AppError::InvalidAlarmTime)
+        ));
+        assert!(matches!(
+            snooze_alarm_inner(&state, created.id, Some(0)),
+            Err(AppError::InvalidSnoozeDuration)
+        ));
+        assert!(matches!(
+            snooze_alarm_inner(&state, created.id, Some(61)),
+            Err(AppError::InvalidSnoozeDuration)
+        ));
+        assert!(matches!(
+            set_alarm_enabled_inner(&state, 9999, true),
+            Err(AppError::AlarmNotFound(9999))
+        ));
+
+        delete_alarm_inner(&state, created.id).expect("delete alarm");
+        assert!(matches!(
+            delete_alarm_inner(&state, created.id),
+            Err(AppError::AlarmNotFound(id)) if id == created.id
         ));
     }
 }

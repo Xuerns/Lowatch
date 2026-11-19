@@ -366,6 +366,32 @@
     </div>
 
     <div class="settings-section">
+      <h2 class="section-heading">Alarms</h2>
+      <div class="settings-card">
+        <div class="setting-row">
+          <div class="setting-info">
+            <span class="setting-label">Alarm sound</span>
+            <span class="setting-desc">
+              Loop the selected ringtone until the alarm is snoozed or dismissed
+            </span>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={settingsStore.alarmSoundEnabled}
+            aria-label="Alarm sound"
+            class="toggle-switch"
+            class:toggle-switch-on={settingsStore.alarmSoundEnabled}
+            onclick={() =>
+              settingsStore.setAlarmSoundEnabled(!settingsStore.alarmSoundEnabled)}
+          >
+            <span class="toggle-thumb"></span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="settings-section">
       <h2 class="section-heading">About</h2>
       <div class="settings-card">
         <div class="setting-row">

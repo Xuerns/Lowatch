@@ -1,3 +1,4 @@
+pub mod alarm;
 pub mod commands;
 pub mod db;
 pub mod error;
@@ -123,6 +124,12 @@ pub fn run() {
                 eprintln!("failed to recover crashed stopwatches: {err}");
             }
 
+            if let Ok(now) = stopwatch::now_ms()
+                && let Err(err) = db::rearm_alarms(&conn, now)
+            {
+                eprintln!("failed to rearm alarms: {err}");
+            }
+
             let state = AppState::new(conn);
             let shutdown_flag = Arc::clone(&state.shutdown_flag);
             let shutdown_wake = Arc::clone(&state.shutdown_wake);
@@ -177,6 +184,14 @@ pub fn run() {
             commands::complete_timer,
             commands::reset_timer,
             commands::delete_timer,
+            commands::list_alarms,
+            commands::create_alarm,
+            commands::update_alarm,
+            commands::set_alarm_enabled,
+            commands::ring_alarm,
+            commands::snooze_alarm,
+            commands::dismiss_alarm,
+            commands::delete_alarm,
         ]);
 
     let app = match builder.build(tauri::generate_context!()) {

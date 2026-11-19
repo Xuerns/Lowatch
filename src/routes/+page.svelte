@@ -2,12 +2,15 @@
   import { onMount } from "svelte";
   import { fly } from "svelte/transition";
   import { getCurrentWindow } from "@tauri-apps/api/window";
+  import AlarmRingView from "$lib/components/AlarmRingView.svelte";
+  import AlarmsView from "$lib/components/AlarmsView.svelte";
   import FocusView from "$lib/components/FocusView.svelte";
   import SettingsView from "$lib/components/SettingsView.svelte";
   import Sidebar, { type AppPage } from "$lib/components/Sidebar.svelte";
   import StopwatchCard from "$lib/components/StopwatchCard.svelte";
   import StopwatchMaximizedView from "$lib/components/StopwatchMaximizedView.svelte";
   import TimerCard from "$lib/components/TimerCard.svelte";
+  import { alarmStore } from "$lib/stores/alarms.svelte";
   import { settingsStore } from "$lib/stores/settings.svelte";
   import { stopwatchStore } from "$lib/stores/stopwatches.svelte";
   import { timerStore } from "$lib/stores/timers.svelte";
@@ -40,12 +43,27 @@
       ? stopwatchStore.errorMessage
       : activePage === "timer"
         ? timerStore.errorMessage
-        : null
+        : activePage === "alarm"
+          ? alarmStore.errorMessage
+          : null
+  );
+
+  let activePageTitle = $derived(
+    activePage === "stopwatch" ? "Stopwatch" : activePage === "timer" ? "Timer" : "Alarm"
+  );
+
+  let activePageNoun = $derived(
+    activePage === "stopwatch" ? "stopwatch" : activePage === "timer" ? "timer" : "alarm"
+  );
+
+  let activePagePlural = $derived(
+    activePage === "stopwatch" ? "stopwatches" : activePage === "timer" ? "timers" : "alarms"
   );
 
   onMount(() => {
     void stopwatchStore.load();
     void timerStore.load();
+    void alarmStore.load();
 
     let unlistenResize: (() => void) | undefined;
     void (async () => {
@@ -63,6 +81,7 @@
       unlistenResize?.();
       stopwatchStore.destroy();
       timerStore.destroy();
+      alarmStore.destroy();
     };
   });
 
@@ -83,6 +102,12 @@
       maximizedStopwatch === null
     ) {
       maximizedStopwatchId = null;
+    }
+  });
+
+  $effect(() => {
+    if (alarmStore.ringingAlarm !== null && stopwatchStore.focusedId !== null) {
+      void stopwatchStore.exitFocus();
     }
   });
 
@@ -107,6 +132,8 @@
         await stopwatchStore.create();
       } else if (activePage === "timer") {
         await timerStore.create(undefined, settingsStore.defaultTimerDurationMs);
+      } else if (activePage === "alarm") {
+        await alarmStore.create();
       }
     } finally {
       isCreating = false;
@@ -122,8 +149,10 @@
   function handleDismissError(): void {
     if (activePage === "stopwatch") {
       stopwatchStore.clearError();
-    } else {
+    } else if (activePage === "timer") {
       timerStore.clearError();
+    } else if (activePage === "alarm") {
+      alarmStore.clearError();
     }
   }
 
@@ -131,6 +160,15 @@
     await stopwatchStore.enterFocus(id);
   }
 </script>
+
+{#if alarmStore.ringingAlarm !== null}
+  <AlarmRingView
+    alarm={alarmStore.ringingAlarm}
+    nowMs={alarmStore.nowMs}
+    onSnooze={(id) => alarmStore.snooze(id)}
+    onDismiss={(id) => alarmStore.dismiss(id)}
+  />
+{/if}
 
 {#if stopwatchStore.focusedStopwatch !== null}
   <FocusView
@@ -351,6 +389,8 @@
               {/each}
             </section>
           {/if}
+        {:else if activePage === "alarm"}
+          <AlarmsView editMode={isEditMode} />
         {:else if activePage === "settings"}
           <SettingsView />
         {:else if timerStore.loading && timerStore.items.length === 0}
@@ -403,7 +443,7 @@
       <div
         class="fab-bar"
         role="toolbar"
-        aria-label={activePage === "stopwatch" ? "Stopwatch actions" : "Timer actions"}
+        aria-label="{activePageTitle} actions"
       >
       <button
         type="button"
@@ -411,16 +451,8 @@
         class:fab-btn-active={isEditMode}
         onclick={() => (isEditMode = !isEditMode)}
         aria-pressed={isEditMode}
-        aria-label={isEditMode
-          ? "Done editing"
-          : activePage === "stopwatch"
-            ? "Edit stopwatches"
-            : "Edit timers"}
-        title={isEditMode
-          ? "Done editing"
-          : activePage === "stopwatch"
-            ? "Edit stopwatches"
-            : "Edit timers"}
+        aria-label={isEditMode ? "Done editing" : `Edit ${activePagePlural}`}
+        title={isEditMode ? "Done editing" : `Edit ${activePagePlural}`}
       >
         {#if isEditMode}
           <svg
@@ -459,8 +491,8 @@
         class="fab-btn"
         disabled={isCreating}
         onclick={handleQuickCreate}
-        aria-label={activePage === "stopwatch" ? "New stopwatch" : "New timer"}
-        title={activePage === "stopwatch" ? "New stopwatch" : "New timer"}
+        aria-label={`New ${activePageNoun}`}
+        title={`New ${activePageNoun}`}
       >
         <svg
           width="17"

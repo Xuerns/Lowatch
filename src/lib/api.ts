@@ -99,3 +99,65 @@ export async function resetTimer(id: number): Promise<TimerDto> {
 export async function deleteTimer(id: number): Promise<void> {
   return invoke<void>("delete_timer", { id });
 }
+
+export interface AlarmDto {
+  id: number;
+  name: string;
+  hour: number;
+  minute: number;
+  /** Bitmask Senin..Minggu: bit 0 = Senin. Nilai 0 berarti alarm sekali pakai. */
+  repeat_days: number;
+  enabled: boolean;
+  snoozed_until_ms: number | null;
+  next_ring_at_ms: number | null;
+  position: number;
+}
+
+export async function listAlarms(): Promise<AlarmDto[]> {
+  return invoke<AlarmDto[]>("list_alarms");
+}
+
+export async function createAlarm(
+  name?: string,
+  hour?: number,
+  minute?: number,
+  repeatDays?: number
+): Promise<AlarmDto> {
+  const clean = name !== undefined && name.trim().length > 0 ? name : undefined;
+  return invoke<AlarmDto>("create_alarm", {
+    name: clean ?? null,
+    hour: hour ?? null,
+    minute: minute ?? null,
+    repeatDays: repeatDays ?? null,
+  });
+}
+
+export async function updateAlarm(
+  id: number,
+  name: string,
+  hour: number,
+  minute: number,
+  repeatDays: number
+): Promise<AlarmDto> {
+  return invoke<AlarmDto>("update_alarm", { id, name, hour, minute, repeatDays });
+}
+
+export async function setAlarmEnabled(id: number, enabled: boolean): Promise<AlarmDto> {
+  return invoke<AlarmDto>("set_alarm_enabled", { id, enabled });
+}
+
+export async function ringAlarm(id: number): Promise<AlarmDto> {
+  return invoke<AlarmDto>("ring_alarm", { id });
+}
+
+export async function snoozeAlarm(id: number, minutes: number): Promise<AlarmDto> {
+  return invoke<AlarmDto>("snooze_alarm", { id, minutes });
+}
+
+export async function dismissAlarm(id: number): Promise<AlarmDto> {
+  return invoke<AlarmDto>("dismiss_alarm", { id });
+}
+
+export async function deleteAlarm(id: number): Promise<void> {
+  return invoke<void>("delete_alarm", { id });
+}

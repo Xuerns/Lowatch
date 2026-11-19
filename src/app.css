@@ -1909,3 +1909,376 @@ html, body {
 .maximized-confirm {
   width: min(100%, 300px);
 }
+
+/* ==========================================================================
+   AlarmsView
+   ========================================================================== */
+.alarms-grid {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 20px 76px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 300px));
+  align-content: start;
+  gap: 16px;
+}
+
+.alarm-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px 20px;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+}
+
+.alarm-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.alarm-time-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.alarm-time {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 2.25rem;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: var(--text-strong);
+}
+
+.alarm-card-off .alarm-time {
+  color: var(--text-dim);
+}
+
+.alarm-status-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.alarm-bell {
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
+.alarm-card-off .alarm-bell {
+  color: var(--text-dim);
+}
+
+.alarm-next {
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.alarm-card-off .alarm-next {
+  color: var(--text-dim);
+}
+
+.alarm-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.alarm-name {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.alarm-card-off .alarm-name {
+  color: var(--text-muted);
+}
+
+.alarm-days {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.alarm-day {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--border-card);
+  background-color: transparent;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  line-height: 1;
+  user-select: none;
+}
+
+button.alarm-day {
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease,
+    border-color 120ms ease;
+}
+
+button.alarm-day:hover:not(:disabled) {
+  background-color: var(--bg-control);
+  color: var(--text-strong);
+  border-color: var(--border-strong);
+}
+
+.alarm-day-on {
+  background-color: var(--border-strong);
+  border-color: var(--border-strong);
+  color: var(--text-strong);
+}
+
+button.alarm-day-on:hover:not(:disabled) {
+  background-color: var(--text-muted);
+  border-color: var(--text-muted);
+  color: var(--accent-fg);
+}
+
+button.alarm-day:disabled {
+  cursor: default;
+}
+
+.alarm-card-off .alarm-day {
+  color: var(--text-dim);
+}
+
+.alarm-card-off .alarm-day-on {
+  background-color: var(--bg-control);
+  border-color: var(--bg-control);
+  color: var(--text-secondary);
+}
+
+.alarm-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-card);
+  border-radius: 8px;
+}
+
+.alarm-editor-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.alarm-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  flex: 1 1 180px;
+  min-width: 0;
+}
+
+.alarm-field-time {
+  flex: 0 1 132px;
+}
+
+.alarm-field-label {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.alarm-text-input,
+.alarm-time-input {
+  background-color: var(--bg-app);
+  color: var(--text-primary);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  padding: 7px 10px;
+  font-size: 0.9375rem;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 120ms ease;
+}
+
+.alarm-time-input {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.alarm-text-input:focus-visible,
+.alarm-time-input:focus-visible {
+  border-color: var(--text-muted);
+}
+
+.alarm-editor-error {
+  margin: 0;
+  min-height: 1.2em;
+  font-size: 0.75rem;
+  color: var(--danger-fg);
+  visibility: hidden;
+}
+
+.alarm-editor-error-visible {
+  visibility: visible;
+}
+
+.alarm-editor-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.alarm-save-btn {
+  background-color: var(--accent-bg);
+  color: var(--accent-fg);
+  border: 1px solid var(--accent-bg);
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-family: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease;
+}
+
+.alarm-save-btn:hover:not(:disabled) {
+  background-color: var(--accent-bg-hover);
+  border-color: var(--accent-bg-hover);
+}
+
+.alarm-save-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ==========================================================================
+   AlarmRingView
+   ========================================================================== */
+.alarm-ring-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background-color: var(--bg-app);
+}
+
+.alarm-ring-panel {
+  width: min(100%, 420px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 32px 28px;
+  text-align: center;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+}
+
+.alarm-ring-kicker {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+.alarm-ring-time {
+  margin: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 3.5rem;
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+  color: var(--text-strong);
+}
+
+.alarm-ring-name {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.alarm-ring-repeat {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+}
+
+.alarm-ring-actions {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.alarm-ring-btn {
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border-control);
+  background-color: var(--bg-control);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease;
+}
+
+.alarm-ring-btn:hover:not(:disabled) {
+  background-color: var(--bg-control-hover);
+  border-color: var(--border-strong);
+}
+
+.alarm-ring-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.alarm-ring-btn-primary {
+  background-color: var(--accent-bg);
+  color: var(--accent-fg);
+  border-color: var(--accent-bg);
+}
+
+.alarm-ring-btn-primary:hover:not(:disabled) {
+  background-color: var(--accent-bg-hover);
+  border-color: var(--accent-bg-hover);
+}
