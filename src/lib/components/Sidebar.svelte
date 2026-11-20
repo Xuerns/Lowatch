@@ -6,6 +6,7 @@
     collapsed: boolean;
     stopwatchRunningCount: number;
     timerRunningCount: number;
+    alarmActiveCount?: number;
     onSelectPage: (page: AppPage) => void;
   }
 
@@ -14,6 +15,7 @@
     collapsed,
     stopwatchRunningCount,
     timerRunningCount,
+    alarmActiveCount = 0,
     onSelectPage,
   }: Props = $props();
 </script>
@@ -115,6 +117,11 @@
       </svg>
       {#if !collapsed}
         <span class="nav-label">Alarms</span>
+        {#if alarmActiveCount > 0}
+          <span class="nav-count" aria-label="{alarmActiveCount} active">
+            {alarmActiveCount}
+          </span>
+        {/if}
       {/if}
     </button>
   </nav>

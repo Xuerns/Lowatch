@@ -1,5 +1,6 @@
 import {
   type AlarmDto,
+  bringWindowToFront,
   createAlarm,
   deleteAlarm,
   dismissAlarm,
@@ -9,7 +10,6 @@ import {
   snoozeAlarm,
   updateAlarm,
 } from "../api";
-import { ALARM_SNOOZE_MINUTES } from "../alarm";
 import { settingsStore } from "./settings.svelte";
 
 class AlarmStore {
@@ -18,6 +18,8 @@ class AlarmStore {
   errorMessage = $state<string | null>(null);
   nowMs = $state<number>(Date.now());
   ringingAlarm = $state<AlarmDto | null>(null);
+
+  activeCount = $derived(this.items.filter((item) => item.enabled).length);
 
   #intervalId: ReturnType<typeof setInterval> | null = null;
   #ringingIds = new Set<number>();
@@ -64,6 +66,9 @@ class AlarmStore {
       this.ringingAlarm = updated;
       this.#replaceItem(updated);
       settingsStore.playAlarmNotification();
+      void bringWindowToFront().catch(() => {
+        // Ignore outside Tauri runtime (e.g. browser preview)
+      });
     } catch (err) {
       this.setError(err);
     } finally {
@@ -169,7 +174,7 @@ class AlarmStore {
     if (this.#isResolvingRing) return;
     this.#isResolvingRing = true;
     try {
-      const updated = await snoozeAlarm(id, ALARM_SNOOZE_MINUTES);
+      const updated = await snoozeAlarm(id, settingsStore.alarmSnoozeMinutes);
       this.#replaceItem(updated);
       this.ringingAlarm = null;
       settingsStore.stopAlarmNotification();

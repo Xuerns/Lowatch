@@ -1,3 +1,4 @@
+import { setMinimizeToTray as syncMinimizeToTray } from "../api";
 import {
   clearCustomRingtone,
   extractWaveformPeaks,
@@ -26,8 +27,10 @@ export interface AppSettings {
   theme: ThemeMode;
   transparentWindow: boolean;
   windowOpacity: number;
+  minimizeToTray: boolean;
   timerSoundEnabled: boolean;
   alarmSoundEnabled: boolean;
+  alarmSnoozeMinutes: number;
   showStopwatchTenths: boolean;
   confirmStopwatchReset: boolean;
   defaultTimerDurationMs: number;
@@ -38,8 +41,10 @@ const DEFAULT_SETTINGS: AppSettings = {
   theme: "dark",
   transparentWindow: false,
   windowOpacity: 0.78,
+  minimizeToTray: true,
   timerSoundEnabled: true,
   alarmSoundEnabled: true,
+  alarmSnoozeMinutes: 5,
   showStopwatchTenths: true,
   confirmStopwatchReset: true,
   defaultTimerDurationMs: 5 * 60_000,
@@ -72,6 +77,10 @@ function loadInitialSettings(): AppSettings {
         parsed.windowOpacity <= 0.95
           ? parsed.windowOpacity
           : DEFAULT_SETTINGS.windowOpacity,
+      minimizeToTray:
+        typeof parsed.minimizeToTray === "boolean"
+          ? parsed.minimizeToTray
+          : DEFAULT_SETTINGS.minimizeToTray,
       timerSoundEnabled:
         typeof parsed.timerSoundEnabled === "boolean"
           ? parsed.timerSoundEnabled
@@ -80,6 +89,13 @@ function loadInitialSettings(): AppSettings {
         typeof parsed.alarmSoundEnabled === "boolean"
           ? parsed.alarmSoundEnabled
           : DEFAULT_SETTINGS.alarmSoundEnabled,
+      alarmSnoozeMinutes:
+        typeof parsed.alarmSnoozeMinutes === "number" &&
+        Number.isInteger(parsed.alarmSnoozeMinutes) &&
+        parsed.alarmSnoozeMinutes >= 1 &&
+        parsed.alarmSnoozeMinutes <= 60
+          ? parsed.alarmSnoozeMinutes
+          : DEFAULT_SETTINGS.alarmSnoozeMinutes,
       showStopwatchTenths:
         typeof parsed.showStopwatchTenths === "boolean"
           ? parsed.showStopwatchTenths
@@ -106,8 +122,10 @@ class SettingsStore {
   theme = $state<ThemeMode>(DEFAULT_SETTINGS.theme);
   transparentWindow = $state<boolean>(DEFAULT_SETTINGS.transparentWindow);
   windowOpacity = $state<number>(DEFAULT_SETTINGS.windowOpacity);
+  minimizeToTray = $state<boolean>(DEFAULT_SETTINGS.minimizeToTray);
   timerSoundEnabled = $state<boolean>(DEFAULT_SETTINGS.timerSoundEnabled);
   alarmSoundEnabled = $state<boolean>(DEFAULT_SETTINGS.alarmSoundEnabled);
+  alarmSnoozeMinutes = $state<number>(DEFAULT_SETTINGS.alarmSnoozeMinutes);
   showStopwatchTenths = $state<boolean>(DEFAULT_SETTINGS.showStopwatchTenths);
   confirmStopwatchReset = $state<boolean>(DEFAULT_SETTINGS.confirmStopwatchReset);
   defaultTimerDurationMs = $state<number>(DEFAULT_SETTINGS.defaultTimerDurationMs);
@@ -134,8 +152,10 @@ class SettingsStore {
     this.theme = initial.theme;
     this.transparentWindow = initial.transparentWindow;
     this.windowOpacity = initial.windowOpacity;
+    this.minimizeToTray = initial.minimizeToTray;
     this.timerSoundEnabled = initial.timerSoundEnabled;
     this.alarmSoundEnabled = initial.alarmSoundEnabled;
+    this.alarmSnoozeMinutes = initial.alarmSnoozeMinutes;
     this.showStopwatchTenths = initial.showStopwatchTenths;
     this.confirmStopwatchReset = initial.confirmStopwatchReset;
     this.defaultTimerDurationMs = initial.defaultTimerDurationMs;
@@ -144,6 +164,9 @@ class SettingsStore {
 
     if (typeof window !== "undefined") {
       void this.#loadRingtone();
+      void syncMinimizeToTray(this.minimizeToTray).catch(() => {
+        // Ignore outside Tauri runtime (e.g. browser preview)
+      });
       if (typeof window.matchMedia === "function") {
         const mq = window.matchMedia("(prefers-color-scheme: light)");
         mq.addEventListener("change", () => {
@@ -198,8 +221,10 @@ class SettingsStore {
         theme: this.theme,
         transparentWindow: this.transparentWindow,
         windowOpacity: this.windowOpacity,
+        minimizeToTray: this.minimizeToTray,
         timerSoundEnabled: this.timerSoundEnabled,
         alarmSoundEnabled: this.alarmSoundEnabled,
+        alarmSnoozeMinutes: this.alarmSnoozeMinutes,
         showStopwatchTenths: this.showStopwatchTenths,
         confirmStopwatchReset: this.confirmStopwatchReset,
         defaultTimerDurationMs: this.defaultTimerDurationMs,
@@ -230,6 +255,14 @@ class SettingsStore {
     this.#persist();
   }
 
+  setMinimizeToTray(enabled: boolean): void {
+    this.minimizeToTray = enabled;
+    this.#persist();
+    void syncMinimizeToTray(enabled).catch(() => {
+      // Ignore outside Tauri runtime (e.g. browser preview)
+    });
+  }
+
   setTimerSoundEnabled(enabled: boolean): void {
     this.timerSoundEnabled = enabled;
     this.#persist();
@@ -240,6 +273,12 @@ class SettingsStore {
     if (!enabled) {
       this.stopAlarmNotification();
     }
+    this.#persist();
+  }
+
+  setAlarmSnoozeMinutes(minutes: number): void {
+    const clamped = Math.max(1, Math.min(60, Math.floor(minutes)));
+    this.alarmSnoozeMinutes = clamped;
     this.#persist();
   }
 

@@ -37,6 +37,12 @@
     { label: "1 hour", ms: 60 * 60_000 },
   ];
 
+  const SNOOZE_OPTIONS = [
+    { label: "5 min", minutes: 5 },
+    { label: "10 min", minutes: 10 },
+    { label: "15 min", minutes: 15 },
+  ];
+
   function formatSec(sec: number): string {
     const safe = Math.max(0, sec);
     const mins = Math.floor(safe / 60);
@@ -167,6 +173,26 @@
             />
           </div>
         {/if}
+
+        <div class="setting-row setting-row-divider">
+          <div class="setting-info">
+            <span class="setting-label">Close to system tray</span>
+            <span class="setting-desc">
+              Keep Lowatch running in the tray when closed so alarms and timers stay active
+            </span>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={settingsStore.minimizeToTray}
+            aria-label="Close to system tray"
+            class="toggle-switch"
+            class:toggle-switch-on={settingsStore.minimizeToTray}
+            onclick={() => settingsStore.setMinimizeToTray(!settingsStore.minimizeToTray)}
+          >
+            <span class="toggle-thumb"></span>
+          </button>
+        </div>
       </div>
     </div>
 
@@ -242,10 +268,10 @@
               {#if settingsStore.customRingtoneName !== null}
                 {settingsStore.customRingtoneName}
                 {#if settingsStore.customRingtoneDurationSec !== null && settingsStore.customRingtoneSize !== null}
-                  ({Math.ceil(settingsStore.customRingtoneDurationSec)}s Â· {formatFileSize(settingsStore.customRingtoneSize)})
+                  ({Math.ceil(settingsStore.customRingtoneDurationSec)}s · {formatFileSize(settingsStore.customRingtoneSize)})
                 {/if}
               {:else}
-                Default chime (MP3, WAV, OGG, M4A Â· Max 10 MB Â· Clip up to 30s)
+                Default chime (MP3, WAV, OGG, M4A · Max 10 MB · Clip up to 30s)
               {/if}
             </span>
           </div>
@@ -388,6 +414,27 @@
             <span class="toggle-thumb"></span>
           </button>
         </div>
+
+        <div class="setting-row setting-row-col setting-row-divider">
+          <div class="setting-info">
+            <span class="setting-label">Snooze duration</span>
+            <span class="setting-desc">How long an alarm pauses when snoozed</span>
+          </div>
+          <div class="duration-options" role="radiogroup" aria-label="Snooze duration">
+            {#each SNOOZE_OPTIONS as opt (opt.minutes)}
+              <button
+                type="button"
+                role="radio"
+                aria-checked={settingsStore.alarmSnoozeMinutes === opt.minutes}
+                class="option-btn"
+                class:option-btn-active={settingsStore.alarmSnoozeMinutes === opt.minutes}
+                onclick={() => settingsStore.setAlarmSnoozeMinutes(opt.minutes)}
+              >
+                {opt.label}
+              </button>
+            {/each}
+          </div>
+        </div>
       </div>
     </div>
 
@@ -397,9 +444,9 @@
         <div class="setting-row">
           <div class="setting-info">
             <span class="setting-label">Lowatch</span>
-            <span class="setting-desc">Multi-stopwatch and countdown timer desktop app</span>
+            <span class="setting-desc">Stopwatch, countdown timer, and alarm desktop app</span>
           </div>
-          <span class="version-text">v0.1.0</span>
+          <span class="version-text">v1.0.0</span>
         </div>
       </div>
     </div>

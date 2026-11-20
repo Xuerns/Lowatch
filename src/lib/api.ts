@@ -161,3 +161,11 @@ export async function dismissAlarm(id: number): Promise<AlarmDto> {
 export async function deleteAlarm(id: number): Promise<void> {
   return invoke<void>("delete_alarm", { id });
 }
+
+export async function setMinimizeToTray(enabled: boolean): Promise<void> {
+  return invoke<void>("set_minimize_to_tray", { enabled });
+}
+
+export async function bringWindowToFront(): Promise<void> {
+  return invoke<void>("bring_window_to_front");
+}

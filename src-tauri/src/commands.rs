@@ -454,6 +454,16 @@ pub fn delete_alarm(state: State<'_, AppState>, id: i64) -> Result<(), String> {
     delete_alarm_inner(&state, id).map_err(Into::into)
 }
 
+#[tauri::command]
+pub fn set_minimize_to_tray(state: State<'_, AppState>, enabled: bool) {
+    state.set_minimize_to_tray(enabled);
+}
+
+#[tauri::command]
+pub fn bring_window_to_front(app: tauri::AppHandle) {
+    crate::reveal_main_window(&app, true);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

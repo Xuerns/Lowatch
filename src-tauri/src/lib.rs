@@ -14,7 +14,11 @@ use std::sync::{
 use std::time::Duration;
 
 use rusqlite::Connection;
-use tauri::Manager;
+use tauri::{
+    AppHandle, Manager, UserAttentionType,
+    menu::{MenuBuilder, MenuItemBuilder},
+    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+};
 
 use crate::error::AppError;
 use crate::focus::FocusState;
@@ -22,11 +26,17 @@ use crate::focus::FocusState;
 /// Interval penulisan `heartbeat_ms` ke SQLite selama ada stopwatch berjalan (sesuai PRD 5.3 / F-12).
 pub const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(15);
 
+const TRAY_ID: &str = "lowatch-tray";
+const TRAY_MENU_SHOW: &str = "tray-show";
+const TRAY_MENU_QUIT: &str = "tray-quit";
+
 pub struct AppState {
     pub db: Mutex<Connection>,
     pub focus: Mutex<FocusState>,
     shutdown_flag: Arc<AtomicBool>,
     shutdown_wake: Arc<(Mutex<bool>, Condvar)>,
+    minimize_to_tray: AtomicBool,
+    quitting: AtomicBool,
 }
 
 impl AppState {
@@ -36,6 +46,8 @@ impl AppState {
             focus: Mutex::new(FocusState::default()),
             shutdown_flag: Arc::new(AtomicBool::new(false)),
             shutdown_wake: Arc::new((Mutex::new(false), Condvar::new())),
+            minimize_to_tray: AtomicBool::new(true),
+            quitting: AtomicBool::new(false),
         }
     }
 
@@ -47,6 +59,24 @@ impl AppState {
         self.focus.lock().map_err(|_| AppError::StateLockPoisoned)
     }
 
+    pub fn set_minimize_to_tray(&self, enabled: bool) {
+        self.minimize_to_tray.store(enabled, Ordering::SeqCst);
+    }
+
+    pub fn minimize_to_tray(&self) -> bool {
+        self.minimize_to_tray.load(Ordering::SeqCst)
+    }
+
+    pub fn mark_quitting(&self) {
+        self.quitting.store(true, Ordering::SeqCst);
+    }
+
+    /// Menentukan apakah penutupan jendela harus menyembunyikan aplikasi ke system tray
+    /// alih-alih menghentikan proses (agar alarm dan timer tetap aktif di latar belakang).
+    pub fn should_hide_to_tray(&self) -> bool {
+        self.minimize_to_tray.load(Ordering::SeqCst) && !self.quitting.load(Ordering::SeqCst)
+    }
+
     /// Memberi sinyal penghentian ke background thread heartbeat dan membangunkan `Condvar` secara instan.
     pub fn signal_shutdown(&self) {
         self.shutdown_flag.store(true, Ordering::SeqCst);
@@ -56,6 +86,69 @@ impl AppState {
         }
         cvar.notify_all();
     }
+}
+
+/// Menampilkan kembali jendela utama dari kondisi minimized/tray dan memfokuskannya.
+pub fn reveal_main_window(app: &AppHandle, request_attention: bool) {
+    if let Some(window) = app.get_webview_window("main") {
+        if let Err(err) = window.unminimize() {
+            eprintln!("failed to unminimize main window: {err}");
+        }
+        if let Err(err) = window.show() {
+            eprintln!("failed to show main window: {err}");
+        }
+        if let Err(err) = window.set_focus() {
+            eprintln!("failed to focus main window: {err}");
+        }
+        if request_attention
+            && let Err(err) = window.request_user_attention(Some(UserAttentionType::Informational))
+        {
+            eprintln!("failed to request window attention: {err}");
+        }
+    }
+}
+
+fn setup_system_tray(app: &tauri::App) -> Result<(), tauri::Error> {
+    let show_item = MenuItemBuilder::with_id(TRAY_MENU_SHOW, "Show Lowatch").build(app)?;
+    let quit_item = MenuItemBuilder::with_id(TRAY_MENU_QUIT, "Quit").build(app)?;
+    let menu = MenuBuilder::new(app)
+        .items(&[&show_item, &quit_item])
+        .build()?;
+
+    let mut tray_builder = TrayIconBuilder::with_id(TRAY_ID)
+        .tooltip("Lowatch")
+        .menu(&menu)
+        .show_menu_on_left_click(false)
+        .on_menu_event(|app_handle, event| match event.id().as_ref() {
+            TRAY_MENU_SHOW => reveal_main_window(app_handle, false),
+            TRAY_MENU_QUIT => {
+                if let Some(state) = app_handle.try_state::<AppState>() {
+                    state.mark_quitting();
+                    if let Err(err) = pause_all_on_exit(&state) {
+                        eprintln!("failed to pause running stopwatches on tray quit: {err}");
+                    }
+                }
+                app_handle.exit(0);
+            }
+            _ => {}
+        })
+        .on_tray_icon_event(|tray, event| {
+            if let TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            } = event
+            {
+                reveal_main_window(tray.app_handle(), false);
+            }
+        });
+
+    if let Some(icon) = app.default_window_icon().cloned() {
+        tray_builder = tray_builder.icon(icon);
+    }
+
+    tray_builder.build(app)?;
+    Ok(())
 }
 
 /// Menjalankan satu siklus pembaruan `heartbeat_ms` untuk seluruh stopwatch yang sedang berjalan.
@@ -101,17 +194,7 @@ fn wait_for_heartbeat_or_shutdown(
 pub fn run() {
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            if let Some(window) = app.get_webview_window("main") {
-                if let Err(err) = window.unminimize() {
-                    eprintln!("failed to unminimize main window: {err}");
-                }
-                if let Err(err) = window.show() {
-                    eprintln!("failed to show main window: {err}");
-                }
-                if let Err(err) = window.set_focus() {
-                    eprintln!("failed to focus main window: {err}");
-                }
-            }
+            reveal_main_window(app, false);
         }))
         .setup(|app| {
             let app_data_dir = app.path().app_data_dir()?;
@@ -134,6 +217,10 @@ pub fn run() {
             let shutdown_flag = Arc::clone(&state.shutdown_flag);
             let shutdown_wake = Arc::clone(&state.shutdown_wake);
             app.manage(state);
+
+            if let Err(err) = setup_system_tray(app) {
+                eprintln!("failed to initialize system tray: {err}");
+            }
 
             let app_handle = app.handle().clone();
             if let Err(err) = std::thread::Builder::new()
@@ -158,11 +245,17 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
-            if let tauri::WindowEvent::CloseRequested { .. } = event
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event
                 && let Some(state) = window.try_state::<AppState>()
-                && let Err(err) = pause_all_on_exit(&state)
             {
-                eprintln!("failed to pause running stopwatches on close: {err}");
+                if state.should_hide_to_tray() {
+                    api.prevent_close();
+                    if let Err(err) = window.hide() {
+                        eprintln!("failed to hide main window to tray: {err}");
+                    }
+                } else if let Err(err) = pause_all_on_exit(&state) {
+                    eprintln!("failed to pause running stopwatches on close: {err}");
+                }
             }
         })
         .invoke_handler(tauri::generate_handler![
@@ -192,6 +285,8 @@ pub fn run() {
             commands::snooze_alarm,
             commands::dismiss_alarm,
             commands::delete_alarm,
+            commands::set_minimize_to_tray,
+            commands::bring_window_to_front,
         ]);
 
     let app = match builder.build(tauri::generate_context!()) {
@@ -320,5 +415,25 @@ mod tests {
         assert_eq!(recovered_sw.started_at_ms, None);
         assert_eq!(recovered_sw.heartbeat_ms, None);
         assert_eq!(recovered_sw.accumulated_ms, hb_after_tick - 1_000);
+    }
+
+    #[test]
+    fn test_minimize_to_tray_and_quitting_flags() {
+        let (_dir, _db_path, state) = make_test_state();
+
+        // Default aktif agar alarm & timer tetap hidup saat jendela ditutup
+        assert!(state.minimize_to_tray());
+        assert!(state.should_hide_to_tray());
+
+        // Jika pengguna mematikan opsi close-to-tray, jendela langsung keluar
+        state.set_minimize_to_tray(false);
+        assert!(!state.minimize_to_tray());
+        assert!(!state.should_hide_to_tray());
+
+        // Jika diaktifkan kembali lalu pengguna memilih Quit dari tray, tetap harus keluar
+        state.set_minimize_to_tray(true);
+        assert!(state.should_hide_to_tray());
+        state.mark_quitting();
+        assert!(!state.should_hide_to_tray());
     }
 }

@@ -165,6 +165,7 @@
   <AlarmRingView
     alarm={alarmStore.ringingAlarm}
     nowMs={alarmStore.nowMs}
+    snoozeMinutes={settingsStore.alarmSnoozeMinutes}
     onSnooze={(id) => alarmStore.snooze(id)}
     onDismiss={(id) => alarmStore.dismiss(id)}
   />
@@ -266,6 +267,7 @@
         collapsed={!isMaximized && isSidebarCollapsed}
         stopwatchRunningCount={stopwatchStore.runningCount}
         timerRunningCount={timerStore.runningCount}
+        alarmActiveCount={alarmStore.activeCount}
         onSelectPage={handleSelectPage}
       />
 

@@ -1,5 +1,6 @@
 import {
   type TimerDto,
+  bringWindowToFront,
   listTimers,
   createTimer,
   renameTimer,
@@ -59,6 +60,9 @@ class TimerStore {
       const updated = await completeTimer(id);
       this.#replaceItem(updated);
       settingsStore.playTimerNotification(updated.name);
+      void bringWindowToFront().catch(() => {
+        // Ignore outside Tauri runtime (e.g. browser preview)
+      });
     } catch (err) {
       this.setError(err);
     } finally {

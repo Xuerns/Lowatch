@@ -5,11 +5,18 @@
   interface Props {
     alarm: AlarmDto;
     nowMs: number;
+    snoozeMinutes?: number;
     onSnooze: (id: number) => Promise<void> | void;
     onDismiss: (id: number) => Promise<void> | void;
   }
 
-  let { alarm, nowMs, onSnooze, onDismiss }: Props = $props();
+  let {
+    alarm,
+    nowMs,
+    snoozeMinutes = ALARM_SNOOZE_MINUTES,
+    onSnooze,
+    onDismiss,
+  }: Props = $props();
 
   let pending = $state<"snooze" | "dismiss" | null>(null);
   let snoozeBtnEl = $state<HTMLButtonElement | null>(null);
@@ -78,7 +85,7 @@
         disabled={pending !== null}
         onclick={handleSnooze}
       >
-        {pending === "snooze" ? "Snoozing..." : `Snooze ${ALARM_SNOOZE_MINUTES} min`}
+        {pending === "snooze" ? "Snoozing..." : `Snooze ${snoozeMinutes} min`}
       </button>
       <button
         type="button"
