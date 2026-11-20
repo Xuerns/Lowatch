@@ -41,6 +41,7 @@
 }
 
 :root[data-theme="light"] {
+  color-scheme: light;
   --bg-app: rgba(245, 245, 245, var(--window-alpha));
   --bg-sidebar: rgba(236, 236, 236, var(--window-alpha));
   --bg-card: rgba(255, 255, 255, var(--card-alpha));
@@ -1931,20 +1932,19 @@ html, body {
   background-color: var(--bg-card);
   border: 1px solid var(--border-subtle);
   border-radius: 12px;
+  align-self: start;
+}
+
+.alarm-card button {
+  font-family: inherit;
+  cursor: pointer;
 }
 
 .alarm-card-top {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
-}
-
-.alarm-time-block {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 0;
 }
 
 .alarm-time {
@@ -1955,6 +1955,7 @@ html, body {
   line-height: 1;
   letter-spacing: -0.02em;
   color: var(--text-strong);
+  user-select: none;
 }
 
 .alarm-card-off .alarm-time {
@@ -1966,6 +1967,7 @@ html, body {
   align-items: center;
   gap: 6px;
   min-width: 0;
+  margin-top: -2px;
 }
 
 .alarm-bell {
@@ -2078,28 +2080,13 @@ button.alarm-day:disabled {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 14px;
-  background-color: var(--bg-surface);
-  border: 1px solid var(--border-card);
-  border-radius: 8px;
-}
-
-.alarm-editor-fields {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
 }
 
 .alarm-field {
   display: flex;
   flex-direction: column;
-  gap: 5px;
-  flex: 1 1 180px;
+  gap: 4px;
   min-width: 0;
-}
-
-.alarm-field-time {
-  flex: 0 1 132px;
 }
 
 .alarm-field-label {
@@ -2112,11 +2099,12 @@ button.alarm-day:disabled {
 
 .alarm-text-input,
 .alarm-time-input {
+  width: 100%;
   background-color: var(--bg-app);
   color: var(--text-primary);
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--border-control);
   border-radius: 6px;
-  padding: 7px 10px;
+  padding: 8px 10px;
   font-size: 0.9375rem;
   font-family: inherit;
   outline: none;
@@ -2126,23 +2114,29 @@ button.alarm-day:disabled {
 .alarm-time-input {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-variant-numeric: tabular-nums;
+  font-size: 1.5rem;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  padding: 6px 10px;
 }
 
 .alarm-text-input:focus-visible,
 .alarm-time-input:focus-visible {
-  border-color: var(--text-muted);
+  border-color: var(--text-primary);
+  outline: 1px solid var(--text-primary);
+}
+
+.alarm-text-input[aria-invalid="true"],
+.alarm-time-input[aria-invalid="true"] {
+  border-color: var(--danger-fg);
 }
 
 .alarm-editor-error {
   margin: 0;
-  min-height: 1.2em;
   font-size: 0.75rem;
+  line-height: 1.3;
   color: var(--danger-fg);
-  visibility: hidden;
-}
-
-.alarm-editor-error-visible {
-  visibility: visible;
 }
 
 .alarm-editor-actions {
@@ -2150,21 +2144,41 @@ button.alarm-day:disabled {
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
+  margin-top: 2px;
+}
+
+.alarm-cancel-btn,
+.alarm-save-btn {
+  border-radius: 6px;
+  padding: 7px 14px;
+  font-family: inherit;
+  font-size: 0.8125rem;
+  line-height: 1.2;
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease,
+    border-color 120ms ease;
+}
+
+.alarm-cancel-btn {
+  background-color: var(--bg-control);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-control);
+  font-weight: 500;
+}
+
+.alarm-cancel-btn:hover {
+  background-color: var(--bg-control-hover);
+  color: var(--text-strong);
+  border-color: var(--border-strong);
 }
 
 .alarm-save-btn {
   background-color: var(--accent-bg);
   color: var(--accent-fg);
   border: 1px solid var(--accent-bg);
-  border-radius: 6px;
-  padding: 6px 14px;
-  font-family: inherit;
-  font-size: 0.8125rem;
   font-weight: 600;
-  cursor: pointer;
-  transition:
-    background-color 120ms ease,
-    border-color 120ms ease;
 }
 
 .alarm-save-btn:hover:not(:disabled) {
